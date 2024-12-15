@@ -1,6 +1,55 @@
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE BinaryLiterals #-}
+{-# LANGUAGE OverloadedStrings #-}
+
 module Bitcoin.Prim.Script where
 
-import Data.Primitive.ByteArray as PB
+import qualified Data.Bits as B
+import Data.Bits ((.&.))
+import qualified Data.ByteString as BS
+import qualified Data.ByteString.Builder as BSB
+import qualified Data.Primitive.ByteArray as PB
+import Data.Word (Word8)
+
+-- realization for small builders
+toStrict :: BSB.Builder -> BS.ByteString
+toStrict = BS.toStrict . BSB.toLazyByteString
+{-# INLINE toStrict #-}
+
+fi :: (Num a, Integral b) => b -> a
+fi = fromIntegral
+{-# INLINE fi #-}
+
+newtype Script = Script PB.ByteArray
+  deriving (Eq, Show)
+
+-- | Render a 'Script' as a base16-encoded ByteString.
+render :: Script -> BS.ByteString
+render (Script bs) = toStrict (go 0) where
+  l    = PB.sizeofByteArray bs
+  look = BS.index "0123456789abcdef" . fi
+
+  go j
+    | j == l = mempty
+    | otherwise =
+        let b = PB.indexByteArray bs j :: Word8
+
+            !w4_hi = look (b `B.shiftR` 4)
+            !w4_lo = look (b .&. 0b00001111)
+
+        in  BSB.word8 w4_hi <> BSB.word8 w4_lo <> go (succ j)
+
+to_script :: [Op] -> Script
+to_script = Script . PB.byteArrayFromList . fmap op_to_byte
+
+from_script :: Script -> [Op]
+from_script (Script bs) = PB.foldrByteArray alg [] bs where
+  alg :: Word8 -> [Op] -> [Op]
+  alg b acc = (toEnum (fi b)) : acc
+
+op_to_byte :: Op -> Word8
+op_to_byte = fi . fromEnum
+{-# INLINE op_to_byte #-}
 
 -- | Primitive opcodes.
 data Op =
