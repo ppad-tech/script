@@ -1,5 +1,7 @@
 module Bitcoin.Prim.Script where
 
+import Data.Primitive.ByteArray as PB
+
 -- | Primitive opcodes.
 data Op =
     OP_PUSHBYTES_0
@@ -258,5 +260,5 @@ data Op =
   | OP_RETURN_253
   | OP_RETURN_254
   | OP_INVALIDOPCODE
-  deriving (Eq, Enum)
+  deriving (Eq, Show, Enum)
 
