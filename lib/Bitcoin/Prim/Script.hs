@@ -8,6 +8,8 @@ module Bitcoin.Prim.Script where
 
 import Control.Monad (when)
 import Control.Monad.ST
+import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
+import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Bits as B
 import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString as BS
@@ -16,6 +18,10 @@ import qualified Data.Char as C
 import qualified Data.Primitive.ByteArray as PB
 import Data.STRef
 import Data.Word (Word8, Word16, Word32)
+
+-- max redeem script size for a P2SH output
+_MAX_REDEEM_SCRIPT_SIZE :: Int
+_MAX_REDEEM_SCRIPT_SIZE = 520
 
 -- realization for small builders
 toStrict :: BSB.Builder -> BS.ByteString
@@ -29,9 +35,12 @@ fi = fromIntegral
 newtype Script = Script PB.ByteArray
   deriving (Eq, Show)
 
+newtype ScriptHash = ScriptHash BS.ByteString
+  deriving (Eq, Show)
+
 -- | Render a 'Script' as a base16-encoded ByteString.
-to_hex :: Script -> BS.ByteString
-to_hex (Script bs) = toStrict (go 0) where
+to_base16 :: Script -> BS.ByteString
+to_base16 (Script bs) = toStrict (go 0) where
   l    = PB.sizeofByteArray bs
   look = BS.index "0123456789abcdef" . fi
 
@@ -46,8 +55,8 @@ to_hex (Script bs) = toStrict (go 0) where
         in  BSB.word8 w4_hi <> BSB.word8 w4_lo <> go (succ j)
 
 -- adapted from emilypi's 'base16' package
-from_hex :: BS.ByteString -> Maybe Script
-from_hex bs
+from_base16 :: BS.ByteString -> Maybe Script
+from_base16 bs
     | B.testBit l 0 = Nothing
     | otherwise = runST $ do
         arr <- PB.newByteArray k
@@ -152,6 +161,15 @@ from_script (Script bs) = go 0 where
                       : read_pay (len_idx + 4) (len_idx + 4 + fi pay_len - 1)
 
                 _ -> go (succ j)
+
+
+ba_to_bs :: PB.ByteArray -> BS.ByteString
+ba_to_bs bs = PB.foldrByteArray BS.cons mempty bs
+
+to_scripthash :: Script -> Maybe ScriptHash
+to_scripthash (Script bs)
+  | PB.sizeofByteArray bs > _MAX_REDEEM_SCRIPT_SIZE = Nothing
+  | otherwise = Just (ScriptHash (RIPEMD160.hash (SHA256.hash (ba_to_bs bs))))
 
 pushbytes :: Opcode -> Maybe Int
 pushbytes = \case
