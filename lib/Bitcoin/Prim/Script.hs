@@ -6,7 +6,7 @@
 
 module Bitcoin.Prim.Script where
 
-import Control.Monad (when)
+import Control.Monad (when, unless)
 import Control.Monad.ST
 import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -59,12 +59,11 @@ from_base16 :: BS.ByteString -> Maybe Script
 from_base16 bs
     | B.testBit l 0 = Nothing
     | otherwise = runST $ do
-        arr <- PB.newByteArray k
+        arr <- PB.newByteArray (l `quot` 2)
         ear <- newSTRef False
 
         let loop i o
               | i == l = pure ()
-              | o == k = pure ()
               | otherwise = do
                   let x = BS.index bs i
                       y = BS.index bs (i + 1)
@@ -75,9 +74,10 @@ from_base16 bs
                   when (a == 0xff) $ writeSTRef ear True
                   when (b == 0xff) $ writeSTRef ear True
 
-                  PB.writeByteArray arr o (a .|. b)
-
-                  loop (i + 2) (o + 1)
+                  err <- readSTRef ear
+                  unless err $ do
+                    PB.writeByteArray arr o (a .|. b)
+                    loop (i + 2) (o + 1)
 
         loop 0 0
 
@@ -89,8 +89,6 @@ from_base16 bs
           pure (Just (Script ray))
   where
     l = BS.length bs
-    k = l `quot` 2
-
     look bet = BS.index bet . fi
 
     lo = "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\xff\xff\xff\xff\xff\xff\xff\x0a\x0b\x0c\x0d\x0e\x0f\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x0a\x0b\x0c\x0d\x0e\x0f\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"
@@ -115,7 +113,7 @@ to_script = Script . PB.byteArrayFromList . fmap term_to_byte where
   term_to_byte :: Term -> Word8
   term_to_byte = \case
     OPCODE op -> fi (fromEnum op)
-    BYTE w8 -> fi w8
+    BYTE w8 -> w8
   {-# INLINE term_to_byte #-}
 
 from_script :: Script -> [Term]
