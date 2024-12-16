@@ -1,6 +1,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -23,6 +24,10 @@ import Data.Word (Word8, Word16, Word32)
 _MAX_REDEEM_SCRIPT_SIZE :: Int
 _MAX_REDEEM_SCRIPT_SIZE = 520
 
+-- max witness script size
+_MAX_WITNESS_SCRIPT_SIZE :: Int
+_MAX_WITNESS_SCRIPT_SIZE = 10_000
+
 -- realization for small builders
 toStrict :: BSB.Builder -> BS.ByteString
 toStrict = BS.toStrict . BSB.toLazyByteString
@@ -40,6 +45,18 @@ newtype ScriptHash = ScriptHash BS.ByteString
 
 instance Show ScriptHash where
   show (ScriptHash bs) = "ScriptHash 0x" <> go bs where
+    go b = case BS.uncons b of
+      Nothing -> mempty
+      Just (h, t) ->
+        let !w4_hi = BS.index "0123456789abcdef" (fi h `B.shiftR` 4)
+            !w4_lo = BS.index "0123456789abcdef" (fi h .&. 0b00001111)
+        in  C.chr (fi w4_hi) : C.chr (fi w4_lo) : go t
+
+newtype WitnessScriptHash = WitnessScriptHash BS.ByteString
+  deriving Eq
+
+instance Show WitnessScriptHash where
+  show (WitnessScriptHash bs) = "WitnessScriptHash 0x" <> go bs where
     go b = case BS.uncons b of
       Nothing -> mempty
       Just (h, t) ->
@@ -167,7 +184,6 @@ from_script (Script bs) = go 0 where
 
                 _ -> go (succ j)
 
-
 ba_to_bs :: PB.ByteArray -> BS.ByteString
 ba_to_bs bs = PB.foldrByteArray BS.cons mempty bs
 
@@ -175,6 +191,11 @@ to_scripthash :: Script -> Maybe ScriptHash
 to_scripthash (Script bs)
   | PB.sizeofByteArray bs > _MAX_REDEEM_SCRIPT_SIZE = Nothing
   | otherwise = Just (ScriptHash (RIPEMD160.hash (SHA256.hash (ba_to_bs bs))))
+
+to_witness_scripthash :: Script -> Maybe WitnessScriptHash
+to_witness_scripthash (Script bs)
+  | PB.sizeofByteArray bs > _MAX_WITNESS_SCRIPT_SIZE = Nothing
+  | otherwise = Just (WitnessScriptHash (SHA256.hash (ba_to_bs bs)))
 
 pushbytes :: Opcode -> Maybe Int
 pushbytes = \case
@@ -515,9 +536,4 @@ data Opcode =
   | OP_RETURN_254
   | OP_INVALIDOPCODE
   deriving (Eq, Show, Enum)
-
--- XX hacky test stuff
-
-test_s :: BS.ByteString
-test_s = "76a91489abcdefabbaabbaabbaabbaabbaabbaabbaabba88ac"
 
