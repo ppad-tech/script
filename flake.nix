@@ -2,11 +2,27 @@
   description = "Haskell Bitcoin primitives.";
 
   inputs = {
+    ppad-sha256 = {
+      type = "git";
+      url  = "git://git.ppad.tech/sha256.git";
+      ref  = "master";
+    };
+    ppad-bech32 = {
+      type = "git";
+      url  = "git://git.ppad.tech/bech32.git";
+      ref  = "master";
+    };
+    ppad-ripemd160 = {
+      type = "git";
+      url  = "git://git.ppad.tech/ripemd160.git";
+      ref  = "master";
+    };
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils,
+              ppad-sha256, ppad-ripemd160, ppad-bech32 }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         lib = "ppad-btcprim";
@@ -14,8 +30,19 @@
         pkgs = import nixpkgs { inherit system; };
         hlib = pkgs.haskell.lib;
 
+        sha256 = ppad-sha256.packages.${system}.default;
+        bech32 = ppad-bech32.packages.${system}.default;
+        ripemd160 = ppad-ripemd160.packages.${system}.default;
+
         hpkgs = pkgs.haskell.packages.ghc981.extend (new: old: {
-          ${lib} = old.callCabal2nixWithOptions lib ./. "--enable-profiling" {};
+          ppad-sha256 = sha256;
+          ppad-bech32 = bech32;
+          ppad-ripemd160 = ripemd160;
+          ${lib} = old.callCabal2nixWithOptions lib ./. "--enable-profiling" {
+            ppad-sha256 = new.ppad-sha256;
+            ppad-bech32 = new.ppad-bech32;
+            ppad-ripemd160 = new.ppad-ripemd160;
+          };
         });
 
         cc    = pkgs.stdenv.cc;
