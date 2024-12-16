@@ -36,7 +36,16 @@ newtype Script = Script PB.ByteArray
   deriving (Eq, Show)
 
 newtype ScriptHash = ScriptHash BS.ByteString
-  deriving (Eq, Show)
+  deriving Eq
+
+instance Show ScriptHash where
+  show (ScriptHash bs) = "ScriptHash 0x" <> go bs where
+    go b = case BS.uncons b of
+      Nothing -> mempty
+      Just (h, t) ->
+        let !w4_hi = BS.index "0123456789abcdef" (fi h `B.shiftR` 4)
+            !w4_lo = BS.index "0123456789abcdef" (fi h .&. 0b00001111)
+        in  C.chr (fi w4_hi) : C.chr (fi w4_lo) : go t
 
 -- | Render a 'Script' as a base16-encoded ByteString.
 to_base16 :: Script -> BS.ByteString
@@ -121,21 +130,21 @@ from_script (Script bs) = go 0 where
   l = PB.sizeofByteArray bs
 
   read_pay cur end
-    | cur > end = go cur
-    | otherwise = BYTE (PB.indexByteArray bs cur) : read_pay (cur + 1) end
+    | cur == end = go cur
+    | otherwise  = BYTE (PB.indexByteArray bs cur) : read_pay (cur + 1) end
 
   go j
     | j == l = mempty
     | otherwise =
         let op = toEnum (fi (PB.indexByteArray bs j :: Word8)) :: Opcode
         in  case pushbytes op of
-              Just i  -> OPCODE op : read_pay (j + 1) (j + 1 + i - 1)
+              Just i  -> OPCODE op : read_pay (j + 1) (j + 1 + i)
               Nothing -> OPCODE op : case op of
                 OP_PUSHDATA1 ->
                   let len_idx = j + 1
                       pay_len = PB.indexByteArray bs len_idx :: Word8
                   in    BYTE pay_len
-                      : read_pay (len_idx + 1) (len_idx + 1 + fi pay_len - 1)
+                      : read_pay (len_idx + 1) (len_idx + 1 + fi pay_len)
 
                 OP_PUSHDATA2 ->
                   let len_idx = j + 1
@@ -143,7 +152,7 @@ from_script (Script bs) = go 0 where
                       w8_1 = PB.indexByteArray bs (len_idx + 1) :: Word8
                       pay_len = fi w8_0 .|. fi w8_1 `B.shiftL` 8 :: Word16
                   in    BYTE w8_0 : BYTE w8_1
-                      : read_pay (len_idx + 2) (len_idx + 2 + fi pay_len - 1)
+                      : read_pay (len_idx + 2) (len_idx + 2 + fi pay_len)
 
                 OP_PUSHDATA4 ->
                   let len_idx = j + 1
@@ -156,7 +165,7 @@ from_script (Script bs) = go 0 where
                             .|. fi w8_2 `B.shiftL` 16
                             .|. fi w8_3 `B.shiftL` 24 :: Word32
                   in    BYTE w8_0 : BYTE w8_1 : BYTE w8_2 : BYTE w8_3
-                      : read_pay (len_idx + 4) (len_idx + 4 + fi pay_len - 1)
+                      : read_pay (len_idx + 4) (len_idx + 4 + fi pay_len)
 
                 _ -> go (succ j)
 
