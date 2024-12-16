@@ -1,15 +1,21 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE BinaryLiterals #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Bitcoin.Prim.Script where
 
+import Control.Monad (when)
+import Control.Monad.ST
 import qualified Data.Bits as B
-import Data.Bits ((.&.))
+import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Builder as BSB
+import qualified Data.Char as C
 import qualified Data.Primitive.ByteArray as PB
-import Data.Word (Word8)
+import Data.STRef
+import Data.Word (Word8, Word16, Word32)
 
 -- realization for small builders
 toStrict :: BSB.Builder -> BS.ByteString
@@ -24,8 +30,8 @@ newtype Script = Script PB.ByteArray
   deriving (Eq, Show)
 
 -- | Render a 'Script' as a base16-encoded ByteString.
-render :: Script -> BS.ByteString
-render (Script bs) = toStrict (go 0) where
+to_hex :: Script -> BS.ByteString
+to_hex (Script bs) = toStrict (go 0) where
   l    = PB.sizeofByteArray bs
   look = BS.index "0123456789abcdef" . fi
 
@@ -39,20 +45,196 @@ render (Script bs) = toStrict (go 0) where
 
         in  BSB.word8 w4_hi <> BSB.word8 w4_lo <> go (succ j)
 
-to_script :: [Op] -> Script
-to_script = Script . PB.byteArrayFromList . fmap op_to_byte
+-- adapted from emilypi's 'base16' package
+from_hex :: BS.ByteString -> Maybe Script
+from_hex bs
+    | B.testBit l 0 = Nothing
+    | otherwise = runST $ do
+        arr <- PB.newByteArray k
+        ear <- newSTRef False
 
-from_script :: Script -> [Op]
-from_script (Script bs) = PB.foldrByteArray alg [] bs where
-  alg :: Word8 -> [Op] -> [Op]
-  alg b acc = (toEnum (fi b)) : acc
+        let loop i o
+              | i == l = pure ()
+              | o == k = pure ()
+              | otherwise = do
+                  let x = BS.index bs i
+                      y = BS.index bs (i + 1)
 
-op_to_byte :: Op -> Word8
-op_to_byte = fi . fromEnum
-{-# INLINE op_to_byte #-}
+                      a = look hi x
+                      b = look lo y
+
+                  when (a == 0xff) $ writeSTRef ear True
+                  when (b == 0xff) $ writeSTRef ear True
+
+                  PB.writeByteArray arr o (a .|. b)
+
+                  loop (i + 2) (o + 1)
+
+        loop 0 0
+
+        err <- readSTRef ear
+        if   err
+        then pure Nothing
+        else do
+          ray <- PB.unsafeFreezeByteArray arr
+          pure (Just (Script ray))
+  where
+    l = BS.length bs
+    k = l `quot` 2
+
+    look bet = BS.index bet . fi
+
+    lo = "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\xff\xff\xff\xff\xff\xff\xff\x0a\x0b\x0c\x0d\x0e\x0f\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x0a\x0b\x0c\x0d\x0e\x0f\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"
+
+    hi = "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x10\x20\x30\x40\x50\x60\x70\x80\x90\xff\xff\xff\xff\xff\xff\xff\xa0\xb0\xc0\xd0\xe0\xf0\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xa0\xb0\xc0\xd0\xe0\xf0\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"
+
+data Term =
+    OPCODE Opcode
+  | BYTE Word8
+  deriving Eq
+
+instance Show Term where
+  show (OPCODE o) = show o
+  show (BYTE w) =
+    let look = BS.index "0123456789abcdef" . fi
+        w4_hi = look (w `B.shiftR` 4)
+        w4_lo = look (w .&. 0b00001111)
+    in  "0x" <> (C.chr (fi w4_hi) : C.chr (fi w4_lo) : [])
+
+to_script :: [Term] -> Script
+to_script = Script . PB.byteArrayFromList . fmap term_to_byte where
+  term_to_byte :: Term -> Word8
+  term_to_byte = \case
+    OPCODE op -> fi (fromEnum op)
+    BYTE w8 -> fi w8
+  {-# INLINE term_to_byte #-}
+
+from_script :: Script -> [Term]
+from_script (Script bs) = go 0 where
+  l = PB.sizeofByteArray bs
+
+  read_pay cur end
+    | cur > end = go cur
+    | otherwise = BYTE (PB.indexByteArray bs cur) : read_pay (cur + 1) end
+
+  go j
+    | j == l = mempty
+    | otherwise =
+        let op = toEnum (fi (PB.indexByteArray bs j :: Word8)) :: Opcode
+        in  case pushbytes op of
+              Just i  -> OPCODE op : read_pay (j + 1) (j + 1 + i - 1)
+              Nothing -> OPCODE op : case op of
+                OP_PUSHDATA1 ->
+                  let len_idx = j + 1
+                      pay_len = PB.indexByteArray bs len_idx :: Word8
+                  in    BYTE pay_len
+                      : read_pay (len_idx + 1) (len_idx + 1 + fi pay_len - 1)
+
+                OP_PUSHDATA2 ->
+                  let len_idx = j + 1
+                      w8_0 = PB.indexByteArray bs len_idx :: Word8
+                      w8_1 = PB.indexByteArray bs (len_idx + 1) :: Word8
+                      pay_len = fi w8_0 .|. fi w8_1 `B.shiftL` 8 :: Word16
+                  in    BYTE w8_0 : BYTE w8_1
+                      : read_pay (len_idx + 2) (len_idx + 2 + fi pay_len - 1)
+
+                OP_PUSHDATA4 ->
+                  let len_idx = j + 1
+                      w8_0 = PB.indexByteArray bs len_idx :: Word8
+                      w8_1 = PB.indexByteArray bs (len_idx + 1) :: Word8
+                      w8_2 = PB.indexByteArray bs (len_idx + 2) :: Word8
+                      w8_3 = PB.indexByteArray bs (len_idx + 3) :: Word8
+                      pay_len = fi w8_0
+                            .|. fi w8_1 `B.shiftL` 8
+                            .|. fi w8_2 `B.shiftL` 16
+                            .|. fi w8_3 `B.shiftL` 24 :: Word32
+                  in    BYTE w8_0 : BYTE w8_1 : BYTE w8_2 : BYTE w8_3
+                      : read_pay (len_idx + 4) (len_idx + 4 + fi pay_len - 1)
+
+                _ -> go (succ j)
+
+pushbytes :: Opcode -> Maybe Int
+pushbytes = \case
+  OP_PUSHBYTES_0  -> Just 00
+  OP_PUSHBYTES_1  -> Just 01
+  OP_PUSHBYTES_2  -> Just 02
+  OP_PUSHBYTES_3  -> Just 03
+  OP_PUSHBYTES_4  -> Just 04
+  OP_PUSHBYTES_5  -> Just 05
+  OP_PUSHBYTES_6  -> Just 06
+  OP_PUSHBYTES_7  -> Just 07
+  OP_PUSHBYTES_8  -> Just 08
+  OP_PUSHBYTES_9  -> Just 09
+  OP_PUSHBYTES_10 -> Just 10
+  OP_PUSHBYTES_11 -> Just 11
+  OP_PUSHBYTES_12 -> Just 12
+  OP_PUSHBYTES_13 -> Just 13
+  OP_PUSHBYTES_14 -> Just 14
+  OP_PUSHBYTES_15 -> Just 15
+  OP_PUSHBYTES_16 -> Just 16
+  OP_PUSHBYTES_17 -> Just 17
+  OP_PUSHBYTES_18 -> Just 18
+  OP_PUSHBYTES_19 -> Just 19
+  OP_PUSHBYTES_20 -> Just 20
+  OP_PUSHBYTES_21 -> Just 21
+  OP_PUSHBYTES_22 -> Just 22
+  OP_PUSHBYTES_23 -> Just 23
+  OP_PUSHBYTES_24 -> Just 24
+  OP_PUSHBYTES_25 -> Just 25
+  OP_PUSHBYTES_26 -> Just 26
+  OP_PUSHBYTES_27 -> Just 27
+  OP_PUSHBYTES_28 -> Just 28
+  OP_PUSHBYTES_29 -> Just 29
+  OP_PUSHBYTES_30 -> Just 30
+  OP_PUSHBYTES_31 -> Just 31
+  OP_PUSHBYTES_32 -> Just 32
+  OP_PUSHBYTES_33 -> Just 33
+  OP_PUSHBYTES_34 -> Just 34
+  OP_PUSHBYTES_35 -> Just 35
+  OP_PUSHBYTES_36 -> Just 36
+  OP_PUSHBYTES_37 -> Just 37
+  OP_PUSHBYTES_38 -> Just 38
+  OP_PUSHBYTES_39 -> Just 39
+  OP_PUSHBYTES_40 -> Just 40
+  OP_PUSHBYTES_41 -> Just 41
+  OP_PUSHBYTES_42 -> Just 42
+  OP_PUSHBYTES_43 -> Just 43
+  OP_PUSHBYTES_44 -> Just 44
+  OP_PUSHBYTES_45 -> Just 45
+  OP_PUSHBYTES_46 -> Just 46
+  OP_PUSHBYTES_47 -> Just 47
+  OP_PUSHBYTES_48 -> Just 48
+  OP_PUSHBYTES_49 -> Just 49
+  OP_PUSHBYTES_50 -> Just 50
+  OP_PUSHBYTES_51 -> Just 51
+  OP_PUSHBYTES_52 -> Just 52
+  OP_PUSHBYTES_53 -> Just 53
+  OP_PUSHBYTES_54 -> Just 54
+  OP_PUSHBYTES_55 -> Just 55
+  OP_PUSHBYTES_56 -> Just 56
+  OP_PUSHBYTES_57 -> Just 57
+  OP_PUSHBYTES_58 -> Just 58
+  OP_PUSHBYTES_59 -> Just 59
+  OP_PUSHBYTES_60 -> Just 60
+  OP_PUSHBYTES_61 -> Just 61
+  OP_PUSHBYTES_62 -> Just 62
+  OP_PUSHBYTES_63 -> Just 63
+  OP_PUSHBYTES_64 -> Just 64
+  OP_PUSHBYTES_65 -> Just 65
+  OP_PUSHBYTES_66 -> Just 66
+  OP_PUSHBYTES_67 -> Just 67
+  OP_PUSHBYTES_68 -> Just 68
+  OP_PUSHBYTES_69 -> Just 69
+  OP_PUSHBYTES_70 -> Just 70
+  OP_PUSHBYTES_71 -> Just 71
+  OP_PUSHBYTES_72 -> Just 72
+  OP_PUSHBYTES_73 -> Just 73
+  OP_PUSHBYTES_74 -> Just 74
+  OP_PUSHBYTES_75 -> Just 75
+  _ -> Nothing
 
 -- | Primitive opcodes.
-data Op =
+data Opcode =
     OP_PUSHBYTES_0
   | OP_PUSHBYTES_1
   | OP_PUSHBYTES_2
@@ -310,4 +492,9 @@ data Op =
   | OP_RETURN_254
   | OP_INVALIDOPCODE
   deriving (Eq, Show, Enum)
+
+-- XX hacky test stuff
+
+test_s :: BS.ByteString
+test_s = "76a91489abcdefabbaabbaabbaabbaabbaabbaabbaabba88ac"
 
