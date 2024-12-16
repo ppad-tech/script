@@ -57,10 +57,8 @@ to_base16 (Script bs) = toStrict (go 0) where
     | j == l = mempty
     | otherwise =
         let b = PB.indexByteArray bs j :: Word8
-
             !w4_hi = look (b `B.shiftR` 4)
             !w4_lo = look (b .&. 0b00001111)
-
         in  BSB.word8 w4_hi <> BSB.word8 w4_lo <> go (succ j)
 
 -- adapted from emilypi's 'base16' package
