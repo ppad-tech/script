@@ -2,13 +2,26 @@
 
 module Main where
 
+import qualified Crypto.Curve.Secp256k1 as Secp256k1
+import qualified Crypto.Hash.SHA256 as SHA256
+import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base58Check as B58
 import Bitcoin.Prim.Script
 import Test.Tasty
 import Test.Tasty.HUnit
 
 main :: IO ()
 main = pure ()
+
+sec :: Integer
+sec = 0x05
+
+pub :: Secp256k1.Pub
+pub = Secp256k1.derive_pub sec
+
+p2pkh = B58.encode 0x00
+  (RIPEMD160.hash (SHA256.hash (Secp256k1.serialize_point pub)))
 
 -- p2pkh
 

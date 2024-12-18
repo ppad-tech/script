@@ -47,9 +47,11 @@ test-suite btcprim-tests
     , base
     , base16-bytestring
     , bytestring
+    , ppad-base58
     , ppad-btcprim
-    , ppad-sha256
     , ppad-ripemd160
+    , ppad-secp256k1
+    , ppad-sha256
     , tasty
     , tasty-hunit
 
