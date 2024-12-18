@@ -28,9 +28,10 @@ library
       base >= 4.9 && < 5
     , bytestring >= 0.9 && < 0.13
     , primitive >= 0.8 && < 0.10
+    , ppad-base58 >= 0.1 && < 0.2
+    , ppad-bech32 >= 0.1 && < 0.2
     , ppad-sha256 >= 0.2 && < 0.3
     , ppad-ripemd160 >= 0.1 && < 0.2
-    , ppad-bech32 >= 0.1 && < 0.2
 
 test-suite btcprim-tests
   type:                exitcode-stdio-1.0
