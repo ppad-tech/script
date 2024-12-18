@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               ppad-btcprim
-version:            0.2.1
+version:            0.1.0
 synopsis:           Bitcoin primitives.
 license:            MIT
 license-file:       LICENSE
@@ -30,8 +30,9 @@ library
     , primitive >= 0.8 && < 0.10
     , ppad-base58 >= 0.1 && < 0.2
     , ppad-bech32 >= 0.1 && < 0.2
-    , ppad-sha256 >= 0.2 && < 0.3
     , ppad-ripemd160 >= 0.1 && < 0.2
+    , ppad-secp256k1 >= 0.2.1 && < 0.3
+    , ppad-sha256 >= 0.2 && < 0.3
 
 test-suite btcprim-tests
   type:                exitcode-stdio-1.0
