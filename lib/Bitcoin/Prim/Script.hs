@@ -43,14 +43,21 @@ newtype Script = Script PB.ByteArray
 newtype ScriptHash = ScriptHash BS.ByteString
   deriving Eq
 
+-- split a word8 into a pair of its high and low bits
+hilo :: Word8 -> (Word8, Word8)
+hilo b =
+  let bet = "0123456789abcdef"
+      hi = BS.index bet (fi b `B.shiftR` 4)
+      lo = BS.index bet (fi b .&. 0b00001111)
+  in  (hi, lo)
+
 instance Show ScriptHash where
   show (ScriptHash bs) = "ScriptHash 0x" <> go bs where
     go b = case BS.uncons b of
       Nothing -> mempty
       Just (h, t) ->
-        let !w4_hi = BS.index "0123456789abcdef" (fi h `B.shiftR` 4)
-            !w4_lo = BS.index "0123456789abcdef" (fi h .&. 0b00001111)
-        in  C.chr (fi w4_hi) : C.chr (fi w4_lo) : go t
+        let (hi, lo) = hilo h
+        in  C.chr (fi hi) : C.chr (fi lo) : go t
 
 newtype WitnessScriptHash = WitnessScriptHash BS.ByteString
   deriving Eq
@@ -60,23 +67,19 @@ instance Show WitnessScriptHash where
     go b = case BS.uncons b of
       Nothing -> mempty
       Just (h, t) ->
-        let !w4_hi = BS.index "0123456789abcdef" (fi h `B.shiftR` 4)
-            !w4_lo = BS.index "0123456789abcdef" (fi h .&. 0b00001111)
-        in  C.chr (fi w4_hi) : C.chr (fi w4_lo) : go t
+        let (hi, lo) = hilo h
+        in  C.chr (fi hi) : C.chr (fi lo) : go t
 
 -- | Render a 'Script' as a base16-encoded ByteString.
 to_base16 :: Script -> BS.ByteString
 to_base16 (Script bs) = toStrict (go 0) where
-  l    = PB.sizeofByteArray bs
-  look = BS.index "0123456789abcdef" . fi
-
+  l = PB.sizeofByteArray bs
   go j
     | j == l = mempty
     | otherwise =
         let b = PB.indexByteArray bs j :: Word8
-            !w4_hi = look (b `B.shiftR` 4)
-            !w4_lo = look (b .&. 0b00001111)
-        in  BSB.word8 w4_hi <> BSB.word8 w4_lo <> go (succ j)
+            (hi, lo) = hilo b
+        in  BSB.word8 (fi hi) <> BSB.word8 (fi lo) <> go (succ j)
 
 -- adapted from emilypi's 'base16' package
 from_base16 :: BS.ByteString -> Maybe Script
@@ -127,10 +130,8 @@ data Term =
 instance Show Term where
   show (OPCODE o) = show o
   show (BYTE w) =
-    let look = BS.index "0123456789abcdef" . fi
-        w4_hi = look (w `B.shiftR` 4)
-        w4_lo = look (w .&. 0b00001111)
-    in  "0x" <> (C.chr (fi w4_hi) : C.chr (fi w4_lo) : [])
+    let (hi, lo) = hilo w
+    in  "0x" <> (C.chr (fi hi) : C.chr (fi lo) : [])
 
 to_script :: [Term] -> Script
 to_script = Script . PB.byteArrayFromList . fmap term_to_byte where
