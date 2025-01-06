@@ -28,7 +28,6 @@ _MAX_REDEEM_SCRIPT_SIZE = 520
 _MAX_WITNESS_SCRIPT_SIZE :: Int
 _MAX_WITNESS_SCRIPT_SIZE = 10_000
 
--- realization for small builders
 toStrict :: BSB.Builder -> BS.ByteString
 toStrict = BS.toStrict . BSB.toLazyByteString
 {-# INLINE toStrict #-}
@@ -78,8 +77,10 @@ to_base16 (Script bs) = toStrict (go 0) where
     | j == l = mempty
     | otherwise =
         let b = PB.indexByteArray bs j :: Word8
-            (hi, lo) = hilo b
-        in  BSB.word8 (fi hi) <> BSB.word8 (fi lo) <> go (succ j)
+            (fi -> hi, fi -> lo) = hilo b
+            w16 = hi `B.shiftL` 8
+              .|. lo
+        in  BSB.word16BE w16 <> go (succ j)
 
 -- adapted from emilypi's 'base16' package
 from_base16 :: BS.ByteString -> Maybe Script
