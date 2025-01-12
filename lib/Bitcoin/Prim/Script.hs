@@ -7,14 +7,16 @@
 
 module Bitcoin.Prim.Script where
 
-import Control.Monad (when, unless)
+import Control.Monad (unless)
 import Control.Monad.ST
 import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Bits as B
 import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Internal as BI
 import qualified Data.ByteString.Builder as BSB
+import qualified Data.ByteString.Unsafe as BU
 import qualified Data.Char as C
 import qualified Data.Primitive.ByteArray as PB
 import Data.STRef
@@ -42,12 +44,14 @@ newtype Script = Script PB.ByteArray
 newtype ScriptHash = ScriptHash BS.ByteString
   deriving Eq
 
+hex_charset :: BS.ByteString
+hex_charset = "0123456789abcdef"
+
 -- split a word8 into a pair of its high and low bits
 hilo :: Word8 -> (Word8, Word8)
 hilo b =
-  let bet = "0123456789abcdef"
-      hi = BS.index bet (fi b `B.shiftR` 4)
-      lo = BS.index bet (fi b .&. 0b00001111)
+  let hi = BU.unsafeIndex hex_charset (fi b `B.shiftR` 4)
+      lo = BU.unsafeIndex hex_charset (fi b .&. 0b00001111)
   in  (hi, lo)
 
 instance Show ScriptHash where
@@ -82,32 +86,36 @@ to_base16 (Script bs) = toStrict (go 0) where
               .|. lo
         in  BSB.word16BE w16 <> go (succ j)
 
--- adapted from emilypi's 'base16' package
+word4 :: Word8 -> Maybe Word8
+word4 w8 = fmap fi (BS.elemIndex w8 hex_charset)
+
 from_base16 :: BS.ByteString -> Maybe Script
-from_base16 bs
-    | B.testBit l 0 = Nothing
+from_base16 b16@(BI.PS _ _ b16_l)
+    | B.testBit b16_l 0 = Nothing
     | otherwise = runST $ do
-        arr <- PB.newByteArray (l `quot` 2)
+        arr <- PB.newByteArray (b16_l `quot` 2)
         ear <- newSTRef False
 
-        let loop i o
-              | i == l = pure ()
-              | otherwise = do
-                  let x = BS.index bs i
-                      y = BS.index bs (i + 1)
+        let loop j bs@(BI.PS _ _ l)
+              | l == 0 = pure ()
+              | otherwise = case BS.splitAt 2 bs of
+                  (chunk, etc) -> do
+                    let ws = do
+                          hi <- word4 (BU.unsafeIndex chunk 0)
+                          lo <- word4 (BU.unsafeIndex chunk 1)
+                          pure (hi, lo)
 
-                      a = look hi x
-                      b = look lo y
+                    case ws of
+                      Nothing -> writeSTRef ear True
+                      Just (hi, lo) -> do
+                        err <- readSTRef ear
+                        unless err $ do
+                          let b =   hi `B.shiftL` 4
+                                .|. lo
+                          PB.writeByteArray arr j b
+                          loop (succ j) etc
 
-                  when (a == 0xff) $ writeSTRef ear True
-                  when (b == 0xff) $ writeSTRef ear True
-
-                  err <- readSTRef ear
-                  unless err $ do
-                    PB.writeByteArray arr o (a .|. b)
-                    loop (i + 2) (o + 1)
-
-        loop 0 0
+        loop 0 b16
 
         err <- readSTRef ear
         if   err
@@ -115,13 +123,6 @@ from_base16 bs
         else do
           ray <- PB.unsafeFreezeByteArray arr
           pure (Just (Script ray))
-  where
-    l = BS.length bs
-    look bet = BS.index bet . fi
-
-    lo = "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x01\x02\x03\x04\x05\x06\x07\x08\x09\xff\xff\xff\xff\xff\xff\xff\x0a\x0b\x0c\x0d\x0e\x0f\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x0a\x0b\x0c\x0d\x0e\x0f\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"
-
-    hi = "\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\x00\x10\x20\x30\x40\x50\x60\x70\x80\x90\xff\xff\xff\xff\xff\xff\xff\xa0\xb0\xc0\xd0\xe0\xf0\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xa0\xb0\xc0\xd0\xe0\xf0\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff\xff"
 
 data Term =
     OPCODE Opcode
