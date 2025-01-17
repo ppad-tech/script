@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Bitcoin.Prim.Script where
@@ -19,6 +20,7 @@ import qualified Data.ByteString.Internal as BI
 import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Unsafe as BU
 import qualified Data.Char as C
+import qualified Data.Primitive.Types as PT
 import qualified Data.Primitive.ByteArray as BA
 import Data.STRef
 import Data.Word (Word8, Word16, Word32)
@@ -74,56 +76,63 @@ instance Show WitnessScriptHash where
         let (hi, lo) = hilo h
         in  C.chr (fi hi) : C.chr (fi lo) : go t
 
--- | Render a 'Script' as a base16-encoded ByteString.
-to_base16 :: Script -> BS.ByteString
-to_base16 (Script bs) = toStrict (go 0) where
-  l = BA.sizeofByteArray bs
-  go j
-    | j == l = mempty
-    | otherwise =
-        let b = BA.indexByteArray bs j :: Word8
-            (fi -> hi, fi -> lo) = hilo b
-            w16 = hi `B.shiftL` 8
-              .|. lo
-        in  BSB.word16BE w16 <> go (succ j)
-
-word4 :: Word8 -> Maybe Word8
-word4 w8 = fmap fi (BS.elemIndex w8 hex_charset)
+-- -- | Render a 'Script' as a base16-encoded ByteString.
+-- to_base16 :: Script -> BS.ByteString
+-- to_base16 (Script ba) = runST $
+--   BA.copyByteArrayToPtr
 
 from_base16 :: BS.ByteString -> Maybe Script
-from_base16 b16@(BI.PS _ _ b16_l)
-    | B.testBit b16_l 0 = Nothing
-    | otherwise = runST $ do
-        arr <- BA.newByteArray (b16_l `quot` 2)
-        ear <- newSTRef False
+from_base16 b16 = do
+  bs <- B16.decode b16
+  pure (Script (bs_to_ba bs))
 
-        let loop j bs@(BI.PS _ _ l)
-              | l == 0 = pure ()
-              | otherwise = case BS.splitAt 2 bs of
-                  (chunk, etc) -> do
-                    let ws = do
-                          hi <- word4 (BU.unsafeIndex chunk 0)
-                          lo <- word4 (BU.unsafeIndex chunk 1)
-                          pure (hi, lo)
+bs_to_ba :: BS.ByteString -> BA.ByteArray
+bs_to_ba bs@(BI.PS _ _ l) = runST $ do
+  arr <- BA.newPinnedByteArray l
+  let go !j
+        | j == l = pure ()
+        | otherwise = do
+            let !b = BU.unsafeIndex bs j
+            BA.writeByteArray arr j b
+            go (succ j)
+  go 0
+  BA.unsafeFreezeByteArray arr
 
-                    case ws of
-                      Nothing -> writeSTRef ear True
-                      Just (hi, lo) -> do
-                        err <- readSTRef ear
-                        unless err $ do
-                          let b =   hi `B.shiftL` 4
-                                .|. lo
-                          BA.writeByteArray arr j b
-                          loop (succ j) etc
 
-        loop 0 b16
-
-        err <- readSTRef ear
-        if   err
-        then pure Nothing
-        else do
-          ray <- BA.unsafeFreezeByteArray arr
-          pure (Just (Script ray))
+--from_base16 :: BS.ByteString -> Maybe Script
+--from_base16 b16@(BI.PS _ _ b16_l)
+--    | B.testBit b16_l 0 = Nothing
+--    | otherwise = runST $ do
+--        arr <- BA.newByteArray (b16_l `quot` 2)
+--        ear <- newSTRef False
+--
+--        let loop j bs@(BI.PS _ _ l)
+--              | l == 0 = pure ()
+--              | otherwise = case BS.splitAt 2 bs of
+--                  (chunk, etc) -> do
+--                    let ws = do
+--                          hi <- word4 (BU.unsafeIndex chunk 0)
+--                          lo <- word4 (BU.unsafeIndex chunk 1)
+--                          pure (hi, lo)
+--
+--                    case ws of
+--                      Nothing -> writeSTRef ear True
+--                      Just (hi, lo) -> do
+--                        err <- readSTRef ear
+--                        unless err $ do
+--                          let b =   hi `B.shiftL` 4
+--                                .|. lo
+--                          BA.writeByteArray arr j b
+--                          loop (succ j) etc
+--
+--        loop 0 b16
+--
+--        err <- readSTRef ear
+--        if   err
+--        then pure Nothing
+--        else do
+--          ray <- BA.unsafeFreezeByteArray arr
+--          pure (Just (Script ray))
 
 data Term =
     OPCODE Opcode
