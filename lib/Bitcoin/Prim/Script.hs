@@ -8,7 +8,6 @@
 
 module Bitcoin.Prim.Script where
 
-import Control.Monad (unless)
 import Control.Monad.ST
 import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -20,10 +19,11 @@ import qualified Data.ByteString.Internal as BI
 import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Unsafe as BU
 import qualified Data.Char as C
-import qualified Data.Primitive.Types as PT
 import qualified Data.Primitive.ByteArray as BA
-import Data.STRef
 import Data.Word (Word8, Word16, Word32)
+
+import GHC.ForeignPtr
+import System.IO.Unsafe
 
 -- max redeem script size for a P2SH output
 _MAX_REDEEM_SCRIPT_SIZE :: Int
@@ -51,6 +51,7 @@ hex_charset :: BS.ByteString
 hex_charset = "0123456789abcdef"
 
 -- split a word8 into a pair of its high and low bits
+-- only used for show instances
 hilo :: Word8 -> (Word8, Word8)
 hilo b =
   let hi = BU.unsafeIndex hex_charset (fi b `B.shiftR` 4)
@@ -76,16 +77,26 @@ instance Show WitnessScriptHash where
         let (hi, lo) = hilo h
         in  C.chr (fi hi) : C.chr (fi lo) : go t
 
--- -- | Render a 'Script' as a base16-encoded ByteString.
--- to_base16 :: Script -> BS.ByteString
--- to_base16 (Script ba) = runST $
---   BA.copyByteArrayToPtr
+-- | Convert a 'Script' to a base16-encoded ByteString.
+to_base16 :: Script -> BS.ByteString
+to_base16 (Script ba) = B16.encode (ba_to_bs ba)
 
+-- | Convert a base16-encoded ByteString to a Script.
 from_base16 :: BS.ByteString -> Maybe Script
 from_base16 b16 = do
   bs <- B16.decode b16
   pure (Script (bs_to_ba bs))
 
+-- Convert a pinned ByteArray to a ByteString.
+ba_to_bs :: BA.ByteArray -> BS.ByteString
+ba_to_bs ba = unsafeDupablePerformIO $ do
+  let l = BA.sizeofByteArray ba
+  buf <- mallocPlainForeignPtrBytes l
+  withForeignPtr buf $ \p ->
+    BA.copyByteArrayToAddr p ba 0 l
+  pure (BI.BS buf l)
+
+-- Convert a ByteString to a pinned ByteArray.
 bs_to_ba :: BS.ByteString -> BA.ByteArray
 bs_to_ba bs@(BI.PS _ _ l) = runST $ do
   arr <- BA.newPinnedByteArray l
@@ -97,42 +108,6 @@ bs_to_ba bs@(BI.PS _ _ l) = runST $ do
             go (succ j)
   go 0
   BA.unsafeFreezeByteArray arr
-
-
---from_base16 :: BS.ByteString -> Maybe Script
---from_base16 b16@(BI.PS _ _ b16_l)
---    | B.testBit b16_l 0 = Nothing
---    | otherwise = runST $ do
---        arr <- BA.newByteArray (b16_l `quot` 2)
---        ear <- newSTRef False
---
---        let loop j bs@(BI.PS _ _ l)
---              | l == 0 = pure ()
---              | otherwise = case BS.splitAt 2 bs of
---                  (chunk, etc) -> do
---                    let ws = do
---                          hi <- word4 (BU.unsafeIndex chunk 0)
---                          lo <- word4 (BU.unsafeIndex chunk 1)
---                          pure (hi, lo)
---
---                    case ws of
---                      Nothing -> writeSTRef ear True
---                      Just (hi, lo) -> do
---                        err <- readSTRef ear
---                        unless err $ do
---                          let b =   hi `B.shiftL` 4
---                                .|. lo
---                          BA.writeByteArray arr j b
---                          loop (succ j) etc
---
---        loop 0 b16
---
---        err <- readSTRef ear
---        if   err
---        then pure Nothing
---        else do
---          ray <- BA.unsafeFreezeByteArray arr
---          pure (Just (Script ray))
 
 data Term =
     OPCODE Opcode
@@ -196,9 +171,6 @@ from_script (Script bs) = go 0 where
                       : read_pay (len_idx + 4) (len_idx + 4 + fi pay_len)
 
                 _ -> go (succ j)
-
-ba_to_bs :: BA.ByteArray -> BS.ByteString
-ba_to_bs bs = BA.foldrByteArray BS.cons mempty bs
 
 to_scripthash :: Script -> Maybe ScriptHash
 to_scripthash (Script bs)
