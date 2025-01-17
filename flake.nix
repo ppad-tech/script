@@ -7,6 +7,11 @@
       url  = "git://git.ppad.tech/sha256.git";
       ref  = "master";
     };
+    ppad-base16 = {
+      type = "git";
+      url  = "git://git.ppad.tech/base16.git";
+      ref  = "master";
+    };
     ppad-base58 = {
       type = "git";
       url  = "git://git.ppad.tech/base58.git";
@@ -33,7 +38,7 @@
 
   outputs = {   self, nixpkgs, flake-utils
               , ppad-sha256, ppad-ripemd160
-              , ppad-bech32, ppad-base58
+              , ppad-bech32, ppad-base58, ppad-base16
               , ppad-secp256k1 }:
     flake-utils.lib.eachDefaultSystem (system:
       let
@@ -44,6 +49,7 @@
 
         sha256 = ppad-sha256.packages.${system}.default;
         bech32 = ppad-bech32.packages.${system}.default;
+        base16 = ppad-base16.packages.${system}.default;
         base58 = ppad-base58.packages.${system}.default;
         ripemd160 = ppad-ripemd160.packages.${system}.default;
         secp256k1 = ppad-secp256k1.packages.${system}.default;
@@ -51,12 +57,14 @@
         hpkgs = pkgs.haskell.packages.ghc981.extend (new: old: {
           ppad-sha256 = sha256;
           ppad-bech32 = bech32;
+          ppad-base16 = base16;
           ppad-base58 = base58;
           ppad-ripemd160 = ripemd160;
           ppad-secp256k1 = secp256k1;
           ${lib} = old.callCabal2nixWithOptions lib ./. "--enable-profiling" {
             ppad-sha256 = new.ppad-sha256;
             ppad-bech32 = new.ppad-bech32;
+            ppad-base16 = new.ppad-base16;
             ppad-base58 = new.ppad-base58;
             ppad-ripemd160 = new.ppad-ripemd160;
             ppad-secp256k1 = new.ppad-secp256k1;
