@@ -14,11 +14,12 @@ import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Bits as B
 import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString as BS
+import qualified Data.ByteString.Base16 as B16
 import qualified Data.ByteString.Internal as BI
 import qualified Data.ByteString.Builder as BSB
 import qualified Data.ByteString.Unsafe as BU
 import qualified Data.Char as C
-import qualified Data.Primitive.ByteArray as PB
+import qualified Data.Primitive.ByteArray as BA
 import Data.STRef
 import Data.Word (Word8, Word16, Word32)
 
@@ -38,7 +39,7 @@ fi :: (Num a, Integral b) => b -> a
 fi = fromIntegral
 {-# INLINE fi #-}
 
-newtype Script = Script PB.ByteArray
+newtype Script = Script BA.ByteArray
   deriving (Eq, Show)
 
 newtype ScriptHash = ScriptHash BS.ByteString
@@ -76,11 +77,11 @@ instance Show WitnessScriptHash where
 -- | Render a 'Script' as a base16-encoded ByteString.
 to_base16 :: Script -> BS.ByteString
 to_base16 (Script bs) = toStrict (go 0) where
-  l = PB.sizeofByteArray bs
+  l = BA.sizeofByteArray bs
   go j
     | j == l = mempty
     | otherwise =
-        let b = PB.indexByteArray bs j :: Word8
+        let b = BA.indexByteArray bs j :: Word8
             (fi -> hi, fi -> lo) = hilo b
             w16 = hi `B.shiftL` 8
               .|. lo
@@ -93,7 +94,7 @@ from_base16 :: BS.ByteString -> Maybe Script
 from_base16 b16@(BI.PS _ _ b16_l)
     | B.testBit b16_l 0 = Nothing
     | otherwise = runST $ do
-        arr <- PB.newByteArray (b16_l `quot` 2)
+        arr <- BA.newByteArray (b16_l `quot` 2)
         ear <- newSTRef False
 
         let loop j bs@(BI.PS _ _ l)
@@ -112,7 +113,7 @@ from_base16 b16@(BI.PS _ _ b16_l)
                         unless err $ do
                           let b =   hi `B.shiftL` 4
                                 .|. lo
-                          PB.writeByteArray arr j b
+                          BA.writeByteArray arr j b
                           loop (succ j) etc
 
         loop 0 b16
@@ -121,7 +122,7 @@ from_base16 b16@(BI.PS _ _ b16_l)
         if   err
         then pure Nothing
         else do
-          ray <- PB.unsafeFreezeByteArray arr
+          ray <- BA.unsafeFreezeByteArray arr
           pure (Just (Script ray))
 
 data Term =
@@ -136,7 +137,7 @@ instance Show Term where
     in  "0x" <> (C.chr (fi hi) : C.chr (fi lo) : [])
 
 to_script :: [Term] -> Script
-to_script = Script . PB.byteArrayFromList . fmap term_to_byte where
+to_script = Script . BA.byteArrayFromList . fmap term_to_byte where
   term_to_byte :: Term -> Word8
   term_to_byte = \case
     OPCODE op -> fi (fromEnum op)
@@ -145,39 +146,39 @@ to_script = Script . PB.byteArrayFromList . fmap term_to_byte where
 
 from_script :: Script -> [Term]
 from_script (Script bs) = go 0 where
-  l = PB.sizeofByteArray bs
+  l = BA.sizeofByteArray bs
 
   read_pay cur end
     | cur == end = go cur
-    | otherwise  = BYTE (PB.indexByteArray bs cur) : read_pay (cur + 1) end
+    | otherwise  = BYTE (BA.indexByteArray bs cur) : read_pay (cur + 1) end
 
   go j
     | j == l = mempty
     | otherwise =
-        let op = toEnum (fi (PB.indexByteArray bs j :: Word8)) :: Opcode
+        let op = toEnum (fi (BA.indexByteArray bs j :: Word8)) :: Opcode
         in  case pushbytes op of
               Just i  -> OPCODE op : read_pay (j + 1) (j + 1 + i)
               Nothing -> OPCODE op : case op of
                 OP_PUSHDATA1 ->
                   let len_idx = j + 1
-                      pay_len = PB.indexByteArray bs len_idx :: Word8
+                      pay_len = BA.indexByteArray bs len_idx :: Word8
                   in    BYTE pay_len
                       : read_pay (len_idx + 1) (len_idx + 1 + fi pay_len)
 
                 OP_PUSHDATA2 ->
                   let len_idx = j + 1
-                      w8_0 = PB.indexByteArray bs len_idx :: Word8
-                      w8_1 = PB.indexByteArray bs (len_idx + 1) :: Word8
+                      w8_0 = BA.indexByteArray bs len_idx :: Word8
+                      w8_1 = BA.indexByteArray bs (len_idx + 1) :: Word8
                       pay_len = fi w8_0 .|. fi w8_1 `B.shiftL` 8 :: Word16
                   in    BYTE w8_0 : BYTE w8_1
                       : read_pay (len_idx + 2) (len_idx + 2 + fi pay_len)
 
                 OP_PUSHDATA4 ->
                   let len_idx = j + 1
-                      w8_0 = PB.indexByteArray bs len_idx :: Word8
-                      w8_1 = PB.indexByteArray bs (len_idx + 1) :: Word8
-                      w8_2 = PB.indexByteArray bs (len_idx + 2) :: Word8
-                      w8_3 = PB.indexByteArray bs (len_idx + 3) :: Word8
+                      w8_0 = BA.indexByteArray bs len_idx :: Word8
+                      w8_1 = BA.indexByteArray bs (len_idx + 1) :: Word8
+                      w8_2 = BA.indexByteArray bs (len_idx + 2) :: Word8
+                      w8_3 = BA.indexByteArray bs (len_idx + 3) :: Word8
                       pay_len = fi w8_0
                             .|. fi w8_1 `B.shiftL` 8
                             .|. fi w8_2 `B.shiftL` 16
@@ -187,17 +188,17 @@ from_script (Script bs) = go 0 where
 
                 _ -> go (succ j)
 
-ba_to_bs :: PB.ByteArray -> BS.ByteString
-ba_to_bs bs = PB.foldrByteArray BS.cons mempty bs
+ba_to_bs :: BA.ByteArray -> BS.ByteString
+ba_to_bs bs = BA.foldrByteArray BS.cons mempty bs
 
 to_scripthash :: Script -> Maybe ScriptHash
 to_scripthash (Script bs)
-  | PB.sizeofByteArray bs > _MAX_REDEEM_SCRIPT_SIZE = Nothing
+  | BA.sizeofByteArray bs > _MAX_REDEEM_SCRIPT_SIZE = Nothing
   | otherwise = Just (ScriptHash (RIPEMD160.hash (SHA256.hash (ba_to_bs bs))))
 
 to_witness_scripthash :: Script -> Maybe WitnessScriptHash
 to_witness_scripthash (Script bs)
-  | PB.sizeofByteArray bs > _MAX_WITNESS_SCRIPT_SIZE = Nothing
+  | BA.sizeofByteArray bs > _MAX_WITNESS_SCRIPT_SIZE = Nothing
   | otherwise = Just (WitnessScriptHash (SHA256.hash (ba_to_bs bs)))
 
 pushbytes :: Opcode -> Maybe Int
