@@ -1,7 +1,7 @@
 cabal-version:      3.0
 name:               ppad-script
 version:            0.1.0
-synopsis:           Utilities for working with Script.
+synopsis:           Script and utilities.
 license:            MIT
 license-file:       LICENSE
 author:             Jared Tobin
@@ -11,7 +11,7 @@ build-type:         Simple
 tested-with:        GHC == { 9.8.1 }
 extra-doc-files:    CHANGELOG
 description:
-  Utilities for working with Script.
+  A representation of Script, as well as utilities for working with it.
 
 source-repository head
   type:     git
