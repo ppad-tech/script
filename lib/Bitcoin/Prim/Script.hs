@@ -29,6 +29,7 @@ module Bitcoin.Prim.Script (
   , bs_to_ba
   ) where
 
+import Control.Monad (guard)
 import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Bits as B
@@ -62,6 +63,7 @@ fi = fromIntegral
 -- convert a pinned ByteArray to a ByteString
 ba_to_bs :: BA.ByteArray -> BS.ByteString
 ba_to_bs ba = unsafeDupablePerformIO $ do
+  guard (BA.isByteArrayPinned ba)
   let l = BA.sizeofByteArray ba
   buf <- mallocPlainForeignPtrBytes l
   withForeignPtr buf $ \p ->
@@ -88,9 +90,6 @@ hilo b =
   in  (hi, lo)
 
 -- types ----------------------------------------------------------------------
-
--- XX since we have to export the constructor, add checks that
---    bytearrays are pinned as required
 
 -- | A Script program, represented as a 'ByteArray'.
 newtype Script = Script BA.ByteArray
