@@ -1,27 +1,81 @@
+{-# OPTIONS_GHC -fno-warn-orphans #-}
+{-# OPTIONS_GHC -fno-warn-unused-imports #-}
+{-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 module Main where
 
-import qualified Crypto.Curve.Secp256k1 as Secp256k1
+import Bitcoin.Prim.Script
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
 import qualified Data.ByteString as BS
-import qualified Data.ByteString.Base58Check as B58
-import Bitcoin.Prim.Script
+import qualified Data.Primitive.ByteArray as BA
+import Data.Word (Word8)
 import Test.Tasty
-import Test.Tasty.HUnit
+import qualified Test.Tasty.HUnit as H
+import qualified Test.Tasty.QuickCheck as Q
+
+-- types ----------------------------------------------------------------------
+
+newtype BS = BS BS.ByteString
+  deriving (Eq, Show)
+
+bytes_list :: Int -> Q.Gen [Word8]
+bytes_list k = do
+  l <- Q.chooseInt (0, k)
+  Q.vectorOf l Q.arbitrary
+
+bytes :: Int -> Q.Gen BS.ByteString
+bytes k = do
+  l <- Q.chooseInt (0, k)
+  v <- Q.vectorOf l Q.arbitrary
+  pure (BS.pack v)
+
+instance Q.Arbitrary BS where
+  arbitrary = do
+    b <- bytes 10_000
+    pure (BS b)
+
+instance Q.Arbitrary BA.ByteArray where
+  arbitrary = do
+    b <- bytes_list 10_000
+    pure (BA.byteArrayFromList b)
+
+instance Q.Arbitrary Script where
+  arbitrary = fmap Script Q.arbitrary
+
+-- properties -----------------------------------------------------------------
+
+from_base16_inverts_to_base16 :: Script -> Bool
+from_base16_inverts_to_base16 s =
+  let mscript = from_base16 (to_base16 s)
+  in  case mscript of
+        Nothing -> False
+        Just script -> script == s
+
+to_script_inverts_from_script :: Script -> Bool
+to_script_inverts_from_script s =
+  let script = to_script (from_script s)
+  in  script == s
+
+-- main -----------------------------------------------------------------------
 
 main :: IO ()
-main = pure ()
+main = defaultMain $
+  testGroup "ppad-base16" [
+    testGroup "property tests" [
+      Q.testProperty "from_base16 . to_base16 ~ id" $
+        Q.withMaxSuccess 100 from_base16_inverts_to_base16
+    -- , Q.testProperty "to_script . from_script ~ id" $
+    --     Q.withMaxSuccess 100 to_script_inverts_from_script
+    ]
+  ]
 
-sec :: Integer
-sec = 0x05
 
-pub :: Secp256k1.Pub
-pub = Secp256k1.derive_pub sec
 
-p2pkh = B58.encode 0x00
-  (RIPEMD160.hash (SHA256.hash (Secp256k1.serialize_point pub)))
+
+
+
 
 -- p2pkh
 

@@ -37,6 +37,8 @@ fi :: (Num a, Integral b) => b -> a
 fi = fromIntegral
 {-# INLINE fi #-}
 
+-- XX slow?
+
 -- convert a pinned ByteArray to a ByteString
 ba_to_bs :: BA.ByteArray -> BS.ByteString
 ba_to_bs ba = unsafeDupablePerformIO $ do
@@ -400,6 +402,8 @@ to_script = Script . BA.byteArrayFromList . fmap term_to_byte where
     OPCODE op -> fi (fromEnum op)
     BYTE w8 -> w8
   {-# INLINE term_to_byte #-}
+
+-- XX seems slow
 
 -- | Unpack a 'Script' into a list of Script terms.
 from_script :: Script -> [Term]
