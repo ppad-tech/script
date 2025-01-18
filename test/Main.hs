@@ -20,11 +20,6 @@ import qualified Test.Tasty.QuickCheck as Q
 newtype BS = BS BS.ByteString
   deriving (Eq, Show)
 
-bytes_list :: Int -> Q.Gen [Word8]
-bytes_list k = do
-  l <- Q.chooseInt (0, k)
-  Q.vectorOf l Q.arbitrary
-
 bytes :: Int -> Q.Gen BS.ByteString
 bytes k = do
   l <- Q.chooseInt (0, k)
@@ -38,9 +33,10 @@ instance Q.Arbitrary BS where
 
 instance Q.Arbitrary BA.ByteArray where
   arbitrary = do
-    b <- bytes_list 10_000
-    pure (BA.byteArrayFromList b)
+    b <- bytes 10_000
+    pure (bs_to_ba b)
 
+-- do not use for testing things intended to run on 'real' scripts
 instance Q.Arbitrary Script where
   arbitrary = fmap Script Q.arbitrary
 
@@ -61,6 +57,11 @@ to_script_inverts_from_script s =
   let script = to_script (from_script s)
   in  script == s
 
+foo :: Script -> Bool
+foo s =
+  let terms = from_script s
+  in  length terms >= 0
+
 -- main -----------------------------------------------------------------------
 
 main :: IO ()
@@ -70,7 +71,8 @@ main = defaultMain $
         Q.withMaxSuccess 500 ba_to_bs_inverts_bs_to_ba
     , Q.testProperty "from_base16 . to_base16 ~ id" $
         Q.withMaxSuccess 500 from_base16_inverts_to_base16
-    --  XX slow
+    -- XX need better arbitrary for script; otherwise we'll push insane amounts
+    --    of data
     -- , Q.testProperty "to_script . from_script ~ id" $
     --     Q.withMaxSuccess 100 to_script_inverts_from_script
     ]
@@ -97,4 +99,4 @@ script_terms = [
 
 redeemscript_base16 :: BS.ByteString
 redeemscript_base16 = "5221038282263212c609d9ea2a6e3e172de238d8c39cabe56f3f9e451d2c4c7739ba8721031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f2102b4632d08485ff1df2db55b9dafd23347d1c47a457072a1e87be26896549a873753ae"
-
+--
