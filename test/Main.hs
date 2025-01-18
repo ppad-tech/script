@@ -66,14 +66,26 @@ to_script_inverts_from_script s =
 
 main :: IO ()
 main = defaultMain $
-  testGroup "property tests" [
-      Q.testProperty "ba_to_bs . bs_to_ba ~ id" $
-        Q.withMaxSuccess 500 ba_to_bs_inverts_bs_to_ba
-    , Q.testProperty "from_base16 . to_base16 ~ id" $
-        Q.withMaxSuccess 500 from_base16_inverts_to_base16
-    , Q.testProperty "to_script . from_script ~ id" $
-        Q.withMaxSuccess 100 to_script_inverts_from_script
-    ]
+  testGroup "ppad-script" [
+    testGroup "property tests" [
+        Q.testProperty "ba_to_bs . bs_to_ba ~ id" $
+          Q.withMaxSuccess 500 ba_to_bs_inverts_bs_to_ba
+      , Q.testProperty "from_base16 . to_base16 ~ id" $
+          Q.withMaxSuccess 500 from_base16_inverts_to_base16
+      , Q.testProperty "to_script . from_script ~ id" $
+          Q.withMaxSuccess 500 to_script_inverts_from_script
+      ]
+  , testGroup "unit tests" [
+        H.testCase "base16-encoded script decodes to expected terms" $ do
+          let mscript = from_base16 script_base16
+          case mscript of
+            Nothing -> H.assertFailure "invalid bytestring"
+            Just script -> do
+              let terms = from_script script
+              H.assertEqual mempty terms script_terms
+
+      ]
+  ]
 
 -- p2pkh
 
