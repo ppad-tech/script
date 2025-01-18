@@ -42,7 +42,7 @@
               , ppad-secp256k1 }:
     flake-utils.lib.eachDefaultSystem (system:
       let
-        lib = "ppad-btcprim";
+        lib = "ppad-script";
 
         pkgs = import nixpkgs { inherit system; };
         hlib = pkgs.haskell.lib;

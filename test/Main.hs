@@ -66,16 +66,11 @@ main = defaultMain $
     testGroup "property tests" [
       Q.testProperty "from_base16 . to_base16 ~ id" $
         Q.withMaxSuccess 100 from_base16_inverts_to_base16
+    --  XX slow
     -- , Q.testProperty "to_script . from_script ~ id" $
     --     Q.withMaxSuccess 100 to_script_inverts_from_script
     ]
   ]
-
-
-
-
-
-
 
 -- p2pkh
 
