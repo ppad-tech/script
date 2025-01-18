@@ -6,7 +6,6 @@
 
 module Bitcoin.Prim.Script where
 
-import Control.Monad.ST
 import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
 import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Bits as B
@@ -37,8 +36,6 @@ fi :: (Num a, Integral b) => b -> a
 fi = fromIntegral
 {-# INLINE fi #-}
 
--- XX slow?
-
 -- convert a pinned ByteArray to a ByteString
 ba_to_bs :: BA.ByteArray -> BS.ByteString
 ba_to_bs ba = unsafeDupablePerformIO $ do
@@ -51,16 +48,11 @@ ba_to_bs ba = unsafeDupablePerformIO $ do
 
 -- convert a ByteString to a pinned ByteArray
 bs_to_ba :: BS.ByteString -> BA.ByteArray
-bs_to_ba bs@(BI.PS _ _ l) = runST $ do
-  arr <- BA.newPinnedByteArray l
-  let go !j
-        | j == l = pure ()
-        | otherwise = do
-            let !b = BU.unsafeIndex bs j
-            BA.writeByteArray arr j b
-            go (succ j)
-  go 0
-  BA.unsafeFreezeByteArray arr
+bs_to_ba (BI.PS bp _ l) = unsafeDupablePerformIO $ do
+  buf <- BA.newPinnedByteArray l
+  withForeignPtr bp $ \p ->
+    BA.copyPtrToMutableByteArray buf 0 p l
+  BA.unsafeFreezeByteArray buf
 {-# INLINE bs_to_ba #-}
 
 -- split a word8 into a pair of its high and low bits
@@ -387,16 +379,18 @@ data Opcode =
 -- | Convert a 'Script' to a base16-encoded ByteString.
 to_base16 :: Script -> BS.ByteString
 to_base16 (Script ba) = B16.encode (ba_to_bs ba)
+{-# INLINE to_base16 #-}
 
 -- | Convert a base16-encoded ByteString to a Script.
 from_base16 :: BS.ByteString -> Maybe Script
 from_base16 b16 = do
   bs <- B16.decode b16
   pure (Script (bs_to_ba bs))
+{-# INLINE from_base16 #-}
 
 -- | Pack a list of Script terms into a 'Script'.
 to_script :: [Term] -> Script
-to_script = Script . BA.byteArrayFromList . fmap term_to_byte where
+to_script = Script . bs_to_ba . BS.pack . fmap term_to_byte where
   term_to_byte :: Term -> Word8
   term_to_byte = \case
     OPCODE op -> fi (fromEnum op)
