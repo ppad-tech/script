@@ -71,7 +71,9 @@ benchmark script-bench
       base
     , bytestring
     , criterion
+    , deepseq
     , ppad-script
+    , primitive
 
 benchmark script-weigh
   type:                exitcode-stdio-1.0

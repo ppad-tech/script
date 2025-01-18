@@ -46,6 +46,9 @@ instance Q.Arbitrary Script where
 
 -- properties -----------------------------------------------------------------
 
+ba_to_bs_inverts_bs_to_ba :: BS -> Bool
+ba_to_bs_inverts_bs_to_ba (BS bs) = ba_to_bs (bs_to_ba bs) == bs
+
 from_base16_inverts_to_base16 :: Script -> Bool
 from_base16_inverts_to_base16 s =
   let mscript = from_base16 (to_base16 s)
@@ -62,15 +65,15 @@ to_script_inverts_from_script s =
 
 main :: IO ()
 main = defaultMain $
-  testGroup "ppad-base16" [
-    testGroup "property tests" [
-      Q.testProperty "from_base16 . to_base16 ~ id" $
-        Q.withMaxSuccess 100 from_base16_inverts_to_base16
+  testGroup "property tests" [
+      Q.testProperty "ba_to_bs . bs_to_ba ~ id" $
+        Q.withMaxSuccess 500 ba_to_bs_inverts_bs_to_ba
+    , Q.testProperty "from_base16 . to_base16 ~ id" $
+        Q.withMaxSuccess 500 from_base16_inverts_to_base16
     --  XX slow
     -- , Q.testProperty "to_script . from_script ~ id" $
     --     Q.withMaxSuccess 100 to_script_inverts_from_script
     ]
-  ]
 
 -- p2pkh
 
