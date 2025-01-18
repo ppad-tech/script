@@ -87,6 +87,7 @@ benchmark script-weigh
   build-depends:
       base
     , bytestring
+    , deepseq
     , ppad-script
     , weigh
 
