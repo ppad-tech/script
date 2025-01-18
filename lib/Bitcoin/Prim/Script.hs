@@ -4,7 +4,30 @@
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-module Bitcoin.Prim.Script where
+module Bitcoin.Prim.Script (
+    -- * Script and Script Terms
+    Script(..)
+  , Term(..)
+  , Opcode(..)
+
+    -- * Conversion Utilities
+  , to_base16
+  , from_base16
+  , to_script
+  , from_script
+
+    -- * Script Hashes
+  , ScriptHash(..)
+  , WitnessScriptHash(..)
+  , to_scripthash
+  , to_witness_scripthash
+
+    -- for testing etc.
+  , _MAX_REDEEM_SCRIPT_SIZE
+  , _MAX_WITNESS_SCRIPT_SIZE
+  , ba_to_bs
+  , bs_to_ba
+  ) where
 
 import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
 import qualified Crypto.Hash.SHA256 as SHA256
@@ -65,6 +88,9 @@ hilo b =
   in  (hi, lo)
 
 -- types ----------------------------------------------------------------------
+
+-- XX since we have to export the constructor, add checks that
+--    bytearrays are pinned as required
 
 -- | A Script program, represented as a 'ByteArray'.
 newtype Script = Script BA.ByteArray

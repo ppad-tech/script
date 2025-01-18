@@ -39,7 +39,7 @@ instance Q.Arbitrary BA.ByteArray where
 
 instance Q.Arbitrary Script where
   arbitrary = do
-    l <- Q.chooseInt (0, 1024)
+    l <- Q.chooseInt (0, _MAX_REDEEM_SCRIPT_SIZE)
     -- pushdata must be added with care; easy to blow up quickcheck
     bs <- fmap BS.pack (Q.vectorOf l (Q.chooseEnum (100, 255)))
     pure (Script (bs_to_ba bs))
