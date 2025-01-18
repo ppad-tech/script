@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
 {-# OPTIONS_GHC -fno-warn-unused-imports #-}
+{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 
@@ -36,9 +37,12 @@ instance Q.Arbitrary BA.ByteArray where
     b <- bytes 10_000
     pure (bs_to_ba b)
 
--- do not use for testing things intended to run on 'real' scripts
 instance Q.Arbitrary Script where
-  arbitrary = fmap Script Q.arbitrary
+  arbitrary = do
+    l <- Q.chooseInt (0, 1024)
+    -- pushdata must be added with care; easy to blow up quickcheck
+    bs <- fmap BS.pack (Q.vectorOf l (Q.chooseEnum (100, 255)))
+    pure (Script (bs_to_ba bs))
 
 -- properties -----------------------------------------------------------------
 
@@ -54,13 +58,9 @@ from_base16_inverts_to_base16 s =
 
 to_script_inverts_from_script :: Script -> Bool
 to_script_inverts_from_script s =
-  let script = to_script (from_script s)
+  let !terms  = from_script s
+      !script = to_script terms
   in  script == s
-
-foo :: Script -> Bool
-foo s =
-  let terms = from_script s
-  in  length terms >= 0
 
 -- main -----------------------------------------------------------------------
 
@@ -71,10 +71,8 @@ main = defaultMain $
         Q.withMaxSuccess 500 ba_to_bs_inverts_bs_to_ba
     , Q.testProperty "from_base16 . to_base16 ~ id" $
         Q.withMaxSuccess 500 from_base16_inverts_to_base16
-    -- XX need better arbitrary for script; otherwise we'll push insane amounts
-    --    of data
-    -- , Q.testProperty "to_script . from_script ~ id" $
-    --     Q.withMaxSuccess 100 to_script_inverts_from_script
+    , Q.testProperty "to_script . from_script ~ id" $
+        Q.withMaxSuccess 100 to_script_inverts_from_script
     ]
 
 -- p2pkh

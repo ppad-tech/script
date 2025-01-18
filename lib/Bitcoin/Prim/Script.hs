@@ -390,13 +390,16 @@ from_base16 b16 = do
 
 -- | Pack a list of Script terms into a 'Script'.
 to_script :: [Term] -> Script
-to_script = Script . bs_to_ba . BS.pack . fmap term_to_byte where
-  term_to_byte :: Term -> Word8
-  term_to_byte = \case
-    OPCODE !op -> fi (fromEnum op)
-    BYTE !w8 -> w8
-  {-# INLINE term_to_byte #-}
-{-# NOINLINE to_script #-} -- don't even think about it
+to_script terms =
+    let !bs = BS.pack (fmap term_to_byte terms)
+    in  Script (bs_to_ba bs)
+  where
+    term_to_byte :: Term -> Word8
+    term_to_byte = \case
+      OPCODE !op -> fi (fromEnum op)
+      BYTE !w8 -> w8
+    {-# INLINE term_to_byte #-}
+{-# NOINLINE to_script #-} -- don't even think about removing this
 
 -- | Unpack a 'Script' into a list of Script terms.
 from_script :: Script -> [Term]
