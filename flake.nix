@@ -2,16 +2,21 @@
   description = "Primitive Script support for Haskell.";
 
   inputs = {
+    ppad-nixpkgs = {
+      type = "git";
+      url  = "git://git.ppad.tech/nixpkgs.git";
+      ref  = "master";
+    };
     ppad-base16 = {
       type = "git";
       url  = "git://git.ppad.tech/base16.git";
       ref  = "master";
     };
-    flake-utils.follows = "ppad-base16/flake-utils";
-    nixpkgs.follows = "ppad-base16/nixpkgs";
+    flake-utils.follows = "ppad-nixpkgs/flake-utils";
+    nixpkgs.follows = "ppad-nixpkgs/nixpkgs";
   };
 
-  outputs = {   self, nixpkgs, flake-utils
+  outputs = {   self, nixpkgs, flake-utils, ppad-nixpkgs
               , ppad-base16
             }:
     flake-utils.lib.eachDefaultSystem (system:
