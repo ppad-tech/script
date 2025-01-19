@@ -69,7 +69,7 @@ ba_to_bs ba = unsafeDupablePerformIO $ do
   withForeignPtr buf $ \p ->
     BA.copyByteArrayToAddr p ba 0 l
   pure (BI.BS buf l)
-{-# INLINE ba_to_bs #-}
+{-# NOINLINE ba_to_bs #-}
 
 -- convert a ByteString to a pinned ByteArray
 bs_to_ba :: BS.ByteString -> BA.ByteArray
@@ -78,7 +78,7 @@ bs_to_ba (BI.PS bp _ l) = unsafeDupablePerformIO $ do
   withForeignPtr bp $ \p ->
     BA.copyPtrToMutableByteArray buf 0 p l
   BA.unsafeFreezeByteArray buf
-{-# INLINE bs_to_ba #-}
+{-# NOINLINE bs_to_ba #-}
 
 -- split a word8 into a pair of its high and low bits
 -- only used for show instances
@@ -424,7 +424,7 @@ to_script terms =
       OPCODE !op -> fi (fromEnum op)
       BYTE !w8 -> w8
     {-# INLINE term_to_byte #-}
-{-# NOINLINE to_script #-} -- don't even think about removing this
+{-# NOINLINE to_script #-} -- inlining causes GHC to panic during compilation
 
 -- | Unpack a 'Script' into a list of Script terms.
 from_script :: Script -> [Term]
