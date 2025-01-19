@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Bitcoin.Prim.Script (
     -- * Script and Script Terms
@@ -89,7 +90,7 @@ hilo b =
       lo = BU.unsafeIndex hex_charset (fi b .&. 0b00001111)
   in  (hi, lo)
 
--- types ----------------------------------------------------------------------
+-- script, hash, and term representation --------------------------------------
 
 -- | A Script program, represented as a 'ByteArray'.
 newtype Script = Script BA.ByteArray
@@ -138,6 +139,98 @@ instance Show Term where
   show (BYTE w) =
     let (hi, lo) = hilo w
     in  "0x" <> (C.chr (fi hi) : C.chr (fi lo) : [])
+
+-- script conversions ---------------------------------------------------------
+
+-- | Convert a 'Script' to a base16-encoded ByteString.
+to_base16 :: Script -> BS.ByteString
+to_base16 (Script ba) = B16.encode (ba_to_bs ba)
+{-# INLINE to_base16 #-}
+
+-- | Convert a base16-encoded ByteString to a Script.
+from_base16 :: BS.ByteString -> Maybe Script
+from_base16 b16 = do
+  bs <- B16.decode b16
+  pure (Script (bs_to_ba bs))
+{-# INLINE from_base16 #-}
+
+-- | Pack a list of Script terms into a 'Script'.
+to_script :: [Term] -> Script
+to_script terms =
+    let !bs = BS.pack (fmap term_to_byte terms)
+    in  Script (bs_to_ba bs)
+  where
+    term_to_byte :: Term -> Word8
+    term_to_byte = \case
+      OPCODE !op -> fi (fromEnum op)
+      BYTE !w8 -> w8
+    {-# INLINE term_to_byte #-}
+{-# NOINLINE to_script #-} -- inlining causes GHC to panic during compilation
+
+-- | Unpack a 'Script' into a list of Script terms.
+from_script :: Script -> [Term]
+from_script (Script bs) = go 0 where
+  !l = BA.sizeofByteArray bs
+
+  read_pay !cur !end
+    | cur == end = go cur
+    | otherwise  = BYTE (BA.indexByteArray bs cur) : read_pay (cur + 1) end
+
+  go j
+    | j == l = mempty
+    | otherwise =
+        let !op = toEnum (fi (BA.indexByteArray bs j :: Word8)) :: Opcode
+        in  case pushbytes op of
+              Just !i -> OPCODE op : read_pay (j + 1) (j + 1 + i)
+              Nothing -> OPCODE op : case op of
+                OP_PUSHDATA1 ->
+                  let !len_idx = j + 1
+                      !pay_len = BA.indexByteArray bs len_idx :: Word8
+                  in    BYTE pay_len
+                      : read_pay (len_idx + 1) (len_idx + 1 + fi pay_len)
+
+                OP_PUSHDATA2 ->
+                  let !len_idx = j + 1
+                      !w8_0 = BA.indexByteArray bs len_idx :: Word8
+                      !w8_1 = BA.indexByteArray bs (len_idx + 1) :: Word8
+                      !pay_len = fi w8_0 .|. fi w8_1 `B.shiftL` 8 :: Word16
+                  in    BYTE w8_0 : BYTE w8_1
+                      : read_pay (len_idx + 2) (len_idx + 2 + fi pay_len)
+
+                OP_PUSHDATA4 ->
+                  let !len_idx = j + 1
+                      !w8_0 = BA.indexByteArray bs len_idx :: Word8
+                      !w8_1 = BA.indexByteArray bs (len_idx + 1) :: Word8
+                      !w8_2 = BA.indexByteArray bs (len_idx + 2) :: Word8
+                      !w8_3 = BA.indexByteArray bs (len_idx + 3) :: Word8
+                      !pay_len = fi w8_0
+                             .|. fi w8_1 `B.shiftL` 8
+                             .|. fi w8_2 `B.shiftL` 16
+                             .|. fi w8_3 `B.shiftL` 24 :: Word32
+                  in    BYTE w8_0 : BYTE w8_1 : BYTE w8_2 : BYTE w8_3
+                      : read_pay (len_idx + 4) (len_idx + 4 + fi pay_len)
+
+                _ -> go (succ j)
+
+-- script hashes --------------------------------------------------------------
+
+-- | Convert a 'Script' to a 'ScriptHash', ensuring that it doesn't exceed
+--   the maximum redeemscript size.
+to_scripthash :: Script -> Maybe ScriptHash
+to_scripthash (Script bs)
+  | BA.sizeofByteArray bs > _MAX_REDEEM_SCRIPT_SIZE = Nothing
+  | otherwise = Just $!
+      ScriptHash (RIPEMD160.hash (SHA256.hash (ba_to_bs bs)))
+
+-- | Convert a 'Script' to a 'WitnessScriptHash', ensuring that it doesn't
+--   the maximum witness script size.
+to_witness_scripthash :: Script -> Maybe WitnessScriptHash
+to_witness_scripthash (Script bs)
+  | BA.sizeofByteArray bs > _MAX_WITNESS_SCRIPT_SIZE = Nothing
+  | otherwise = Just $!
+      WitnessScriptHash (SHA256.hash (ba_to_bs bs))
+
+-- opcodes and utilities ------------------------------------------------------
 
 -- | Primitive opcodes.
 data Opcode =
@@ -399,174 +492,9 @@ data Opcode =
   | OP_INVALIDOPCODE
   deriving (Eq, Show, Enum)
 
--- script conversions ---------------------------------------------------------
-
--- | Convert a 'Script' to a base16-encoded ByteString.
-to_base16 :: Script -> BS.ByteString
-to_base16 (Script ba) = B16.encode (ba_to_bs ba)
-{-# INLINE to_base16 #-}
-
--- | Convert a base16-encoded ByteString to a Script.
-from_base16 :: BS.ByteString -> Maybe Script
-from_base16 b16 = do
-  bs <- B16.decode b16
-  pure (Script (bs_to_ba bs))
-{-# INLINE from_base16 #-}
-
--- | Pack a list of Script terms into a 'Script'.
-to_script :: [Term] -> Script
-to_script terms =
-    let !bs = BS.pack (fmap term_to_byte terms)
-    in  Script (bs_to_ba bs)
-  where
-    term_to_byte :: Term -> Word8
-    term_to_byte = \case
-      OPCODE !op -> fi (fromEnum op)
-      BYTE !w8 -> w8
-    {-# INLINE term_to_byte #-}
-{-# NOINLINE to_script #-} -- inlining causes GHC to panic during compilation
-
--- | Unpack a 'Script' into a list of Script terms.
-from_script :: Script -> [Term]
-from_script (Script bs) = go 0 where
-  !l = BA.sizeofByteArray bs
-
-  read_pay !cur !end
-    | cur == end = go cur
-    | otherwise  = BYTE (BA.indexByteArray bs cur) : read_pay (cur + 1) end
-
-  go j
-    | j == l = mempty
-    | otherwise =
-        let !op = toEnum (fi (BA.indexByteArray bs j :: Word8)) :: Opcode
-        in  case pushbytes op of
-              Just !i -> OPCODE op : read_pay (j + 1) (j + 1 + i)
-              Nothing -> OPCODE op : case op of
-                OP_PUSHDATA1 ->
-                  let !len_idx = j + 1
-                      !pay_len = BA.indexByteArray bs len_idx :: Word8
-                  in    BYTE pay_len
-                      : read_pay (len_idx + 1) (len_idx + 1 + fi pay_len)
-
-                OP_PUSHDATA2 ->
-                  let !len_idx = j + 1
-                      !w8_0 = BA.indexByteArray bs len_idx :: Word8
-                      !w8_1 = BA.indexByteArray bs (len_idx + 1) :: Word8
-                      !pay_len = fi w8_0 .|. fi w8_1 `B.shiftL` 8 :: Word16
-                  in    BYTE w8_0 : BYTE w8_1
-                      : read_pay (len_idx + 2) (len_idx + 2 + fi pay_len)
-
-                OP_PUSHDATA4 ->
-                  let !len_idx = j + 1
-                      !w8_0 = BA.indexByteArray bs len_idx :: Word8
-                      !w8_1 = BA.indexByteArray bs (len_idx + 1) :: Word8
-                      !w8_2 = BA.indexByteArray bs (len_idx + 2) :: Word8
-                      !w8_3 = BA.indexByteArray bs (len_idx + 3) :: Word8
-                      !pay_len = fi w8_0
-                             .|. fi w8_1 `B.shiftL` 8
-                             .|. fi w8_2 `B.shiftL` 16
-                             .|. fi w8_3 `B.shiftL` 24 :: Word32
-                  in    BYTE w8_0 : BYTE w8_1 : BYTE w8_2 : BYTE w8_3
-                      : read_pay (len_idx + 4) (len_idx + 4 + fi pay_len)
-
-                _ -> go (succ j)
-
 -- convert a pushbytes opcode to its corresponding int
 pushbytes :: Opcode -> Maybe Int
-pushbytes = \case
-  OP_PUSHBYTES_0  -> Just $! 00
-  OP_PUSHBYTES_1  -> Just $! 01
-  OP_PUSHBYTES_2  -> Just $! 02
-  OP_PUSHBYTES_3  -> Just $! 03
-  OP_PUSHBYTES_4  -> Just $! 04
-  OP_PUSHBYTES_5  -> Just $! 05
-  OP_PUSHBYTES_6  -> Just $! 06
-  OP_PUSHBYTES_7  -> Just $! 07
-  OP_PUSHBYTES_8  -> Just $! 08
-  OP_PUSHBYTES_9  -> Just $! 09
-  OP_PUSHBYTES_10 -> Just $! 10
-  OP_PUSHBYTES_11 -> Just $! 11
-  OP_PUSHBYTES_12 -> Just $! 12
-  OP_PUSHBYTES_13 -> Just $! 13
-  OP_PUSHBYTES_14 -> Just $! 14
-  OP_PUSHBYTES_15 -> Just $! 15
-  OP_PUSHBYTES_16 -> Just $! 16
-  OP_PUSHBYTES_17 -> Just $! 17
-  OP_PUSHBYTES_18 -> Just $! 18
-  OP_PUSHBYTES_19 -> Just $! 19
-  OP_PUSHBYTES_20 -> Just $! 20
-  OP_PUSHBYTES_21 -> Just $! 21
-  OP_PUSHBYTES_22 -> Just $! 22
-  OP_PUSHBYTES_23 -> Just $! 23
-  OP_PUSHBYTES_24 -> Just $! 24
-  OP_PUSHBYTES_25 -> Just $! 25
-  OP_PUSHBYTES_26 -> Just $! 26
-  OP_PUSHBYTES_27 -> Just $! 27
-  OP_PUSHBYTES_28 -> Just $! 28
-  OP_PUSHBYTES_29 -> Just $! 29
-  OP_PUSHBYTES_30 -> Just $! 30
-  OP_PUSHBYTES_31 -> Just $! 31
-  OP_PUSHBYTES_32 -> Just $! 32
-  OP_PUSHBYTES_33 -> Just $! 33
-  OP_PUSHBYTES_34 -> Just $! 34
-  OP_PUSHBYTES_35 -> Just $! 35
-  OP_PUSHBYTES_36 -> Just $! 36
-  OP_PUSHBYTES_37 -> Just $! 37
-  OP_PUSHBYTES_38 -> Just $! 38
-  OP_PUSHBYTES_39 -> Just $! 39
-  OP_PUSHBYTES_40 -> Just $! 40
-  OP_PUSHBYTES_41 -> Just $! 41
-  OP_PUSHBYTES_42 -> Just $! 42
-  OP_PUSHBYTES_43 -> Just $! 43
-  OP_PUSHBYTES_44 -> Just $! 44
-  OP_PUSHBYTES_45 -> Just $! 45
-  OP_PUSHBYTES_46 -> Just $! 46
-  OP_PUSHBYTES_47 -> Just $! 47
-  OP_PUSHBYTES_48 -> Just $! 48
-  OP_PUSHBYTES_49 -> Just $! 49
-  OP_PUSHBYTES_50 -> Just $! 50
-  OP_PUSHBYTES_51 -> Just $! 51
-  OP_PUSHBYTES_52 -> Just $! 52
-  OP_PUSHBYTES_53 -> Just $! 53
-  OP_PUSHBYTES_54 -> Just $! 54
-  OP_PUSHBYTES_55 -> Just $! 55
-  OP_PUSHBYTES_56 -> Just $! 56
-  OP_PUSHBYTES_57 -> Just $! 57
-  OP_PUSHBYTES_58 -> Just $! 58
-  OP_PUSHBYTES_59 -> Just $! 59
-  OP_PUSHBYTES_60 -> Just $! 60
-  OP_PUSHBYTES_61 -> Just $! 61
-  OP_PUSHBYTES_62 -> Just $! 62
-  OP_PUSHBYTES_63 -> Just $! 63
-  OP_PUSHBYTES_64 -> Just $! 64
-  OP_PUSHBYTES_65 -> Just $! 65
-  OP_PUSHBYTES_66 -> Just $! 66
-  OP_PUSHBYTES_67 -> Just $! 67
-  OP_PUSHBYTES_68 -> Just $! 68
-  OP_PUSHBYTES_69 -> Just $! 69
-  OP_PUSHBYTES_70 -> Just $! 70
-  OP_PUSHBYTES_71 -> Just $! 71
-  OP_PUSHBYTES_72 -> Just $! 72
-  OP_PUSHBYTES_73 -> Just $! 73
-  OP_PUSHBYTES_74 -> Just $! 74
-  OP_PUSHBYTES_75 -> Just $! 75
-  _ -> Nothing
-
--- script hashes --------------------------------------------------------------
-
--- | Convert a 'Script' to a 'ScriptHash', ensuring that it doesn't exceed
---   the maximum redeemscript size.
-to_scripthash :: Script -> Maybe ScriptHash
-to_scripthash (Script bs)
-  | BA.sizeofByteArray bs > _MAX_REDEEM_SCRIPT_SIZE = Nothing
-  | otherwise = Just $!
-      ScriptHash (RIPEMD160.hash (SHA256.hash (ba_to_bs bs)))
-
--- | Convert a 'Script' to a 'WitnessScriptHash', ensuring that it doesn't
---   the maximum witness script size.
-to_witness_scripthash :: Script -> Maybe WitnessScriptHash
-to_witness_scripthash (Script bs)
-  | BA.sizeofByteArray bs > _MAX_WITNESS_SCRIPT_SIZE = Nothing
-  | otherwise = Just $!
-      WitnessScriptHash (SHA256.hash (ba_to_bs bs))
+pushbytes (fromEnum -> op)
+  | op < 76 = Just $! fi op
+  | otherwise = Nothing
 
