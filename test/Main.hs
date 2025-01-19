@@ -29,65 +29,62 @@ bytes k = do
 
 instance Q.Arbitrary BS where
   arbitrary = do
-    b <- bytes 10_000
+    b <- bytes 20_000
     pure (BS b)
 
 instance Q.Arbitrary BA.ByteArray where
   arbitrary = do
-    b <- bytes 10_000
+    b <- bytes 20_000
     pure (bs_to_ba b)
 
-instance Q.Arbitrary Script where
+-- generated scripts will tend to be pathological due to pushdata
+newtype RawScript = RawScript Script
+  deriving (Eq, Show)
+
+instance Q.Arbitrary RawScript where
+  arbitrary = fmap (RawScript . Script) Q.arbitrary
+
+-- will contain no or carefully-inserted pushdata opcodes
+newtype ValidRedeemScript = ValidRedeemScript Script
+  deriving (Eq, Show)
+
+instance Q.Arbitrary ValidRedeemScript where
   arbitrary = do
     l <- Q.chooseInt (0, _MAX_REDEEM_SCRIPT_SIZE)
     -- pushdata must be added with care; easy to blow up quickcheck
     bs <- fmap BS.pack (Q.vectorOf l (Q.chooseEnum (100, 255)))
-    pure (Script (bs_to_ba bs))
+    pure (ValidRedeemScript (Script (bs_to_ba bs)))
 
 -- properties -----------------------------------------------------------------
 
 ba_to_bs_inverts_bs_to_ba :: BS -> Bool
 ba_to_bs_inverts_bs_to_ba (BS bs) = ba_to_bs (bs_to_ba bs) == bs
 
-from_base16_inverts_to_base16 :: Script -> Bool
-from_base16_inverts_to_base16 s =
+-- to_base16 should work on every script, pathological or no
+from_base16_inverts_to_base16 :: RawScript -> Bool
+from_base16_inverts_to_base16 (RawScript s) =
   let mscript = from_base16 (to_base16 s)
   in  case mscript of
         Nothing -> False
         Just script -> script == s
 
-to_script_inverts_from_script :: Script -> Bool
-to_script_inverts_from_script s =
+-- we can only use 'from_script' on non-pathological scripts
+to_script_inverts_from_script :: ValidRedeemScript -> Bool
+to_script_inverts_from_script (ValidRedeemScript s) =
   let !terms  = from_script s
       !script = to_script terms
   in  script == s
 
--- main -----------------------------------------------------------------------
+-- assertions -----------------------------------------------------------------
 
-main :: IO ()
-main = defaultMain $
-  testGroup "ppad-script" [
-    testGroup "property tests" [
-        Q.testProperty "ba_to_bs . bs_to_ba ~ id" $
-          Q.withMaxSuccess 500 ba_to_bs_inverts_bs_to_ba
-      , Q.testProperty "from_base16 . to_base16 ~ id" $
-          Q.withMaxSuccess 500 from_base16_inverts_to_base16
-      , Q.testProperty "to_script . from_script ~ id" $
-          Q.withMaxSuccess 500 to_script_inverts_from_script
-      ]
-  , testGroup "unit tests" [
-        H.testCase "base16-encoded script decodes to expected terms" $ do
-          let mscript = from_base16 script_base16
-          case mscript of
-            Nothing -> H.assertFailure "invalid bytestring"
-            Just script -> do
-              let terms = from_script script
-              H.assertEqual mempty terms script_terms
-
-      ]
-  ]
-
--- p2pkh
+base16_encoded_script_decodes_as_expected :: H.Assertion
+base16_encoded_script_decodes_as_expected = do
+  let mscript = from_base16 script_base16
+  case mscript of
+    Nothing -> H.assertFailure "invalid bytestring"
+    Just script -> do
+      let terms = from_script script
+      H.assertEqual mempty terms script_terms
 
 -- https://en.bitcoin.it/wiki/Script#
 -- Standard_Transaction_to_Bitcoin_address_(pay-to-pubkey-hash)
@@ -105,8 +102,25 @@ script_terms = [
   , OPCODE OP_CHECKSIG
   ]
 
--- p2sh
+-- main -----------------------------------------------------------------------
+
+main :: IO ()
+main = defaultMain $
+  testGroup "ppad-script" [
+    testGroup "property tests" [
+        Q.testProperty "ba_to_bs . bs_to_ba ~ id" $
+          Q.withMaxSuccess 500 ba_to_bs_inverts_bs_to_ba
+      , Q.testProperty "from_base16 . to_base16 ~ id" $
+          Q.withMaxSuccess 500 from_base16_inverts_to_base16
+      , Q.testProperty "to_script . from_script ~ id" $
+          Q.withMaxSuccess 1000 to_script_inverts_from_script
+      ]
+  , testGroup "unit tests" [
+        H.testCase "base16-encoded script decodes to expected terms"
+          base16_encoded_script_decodes_as_expected
+      ]
+  ]
 
 redeemscript_base16 :: BS.ByteString
 redeemscript_base16 = "5221038282263212c609d9ea2a6e3e172de238d8c39cabe56f3f9e451d2c4c7739ba8721031b84c5567b126440995d3ed5aaba0565d71e1834604819ff9c17f5e9d5dd078f2102b4632d08485ff1df2db55b9dafd23347d1c47a457072a1e87be26896549a873753ae"
---
+
