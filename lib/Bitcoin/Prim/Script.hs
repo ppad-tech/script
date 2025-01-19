@@ -1,9 +1,28 @@
+{-# OPTIONS_HADDOCK prune #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE BinaryLiterals #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
+
+-- |
+-- Module: Bitcoin.Prim.Script
+-- Copyright: (c) 2025 Jared Tobin
+-- License: MIT
+-- Maintainer: Jared Tobin <jared@ppad.tech>
+--
+-- Representations for [Script](https://en.bitcoin.it/wiki/Script),
+-- including abstract syntax, 'ByteArray', and base16-encoded
+-- 'ByteString' versions, as well as fast conversion utilities for
+-- working with them.
+--
+-- Also included are the 'ScriptHash' and
+-- 'WitnessScriptHash' types representing
+-- [BIP16](https://github.com/bitcoin/bips/blob/master/bip-0016.mediawiki)
+-- redeem script and
+-- [BIP141](https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki)
+-- witness script hashes.
 
 module Bitcoin.Prim.Script (
     -- * Script and Script Terms
@@ -96,6 +115,21 @@ hilo b =
 newtype Script = Script BA.ByteArray
   deriving (Eq, Show)
 
+-- | Terms of the Script language (either opcodes or bytes).
+data Term =
+    OPCODE {-# UNPACK #-} !Opcode
+  | BYTE   {-# UNPACK #-} !Word8
+  deriving Eq
+
+instance Show Term where
+  show (OPCODE o) = show o
+  show (BYTE w) =
+    let (hi, lo) = hilo w
+    in  "0x" <> (C.chr (fi hi) : C.chr (fi lo) : [])
+
+-- XX we're following rust-bitcoin, but should these really be included
+--    in this particular library?
+
 -- | A p2sh scripthash, i.e. HASH160 of a 'Script'.
 --
 --   The underlying 'Script' is guaranteed to be at most 520 bytes, to
@@ -127,18 +161,6 @@ instance Show WitnessScriptHash where
       Just (h, t) ->
         let (hi, lo) = hilo h
         in  C.chr (fi hi) : C.chr (fi lo) : go t
-
--- | Terms of the Script language (either opcodes or bytes).
-data Term =
-    OPCODE {-# UNPACK #-} !Opcode
-  | BYTE   {-# UNPACK #-} !Word8
-  deriving Eq
-
-instance Show Term where
-  show (OPCODE o) = show o
-  show (BYTE w) =
-    let (hi, lo) = hilo w
-    in  "0x" <> (C.chr (fi hi) : C.chr (fi lo) : [])
 
 -- script conversions ---------------------------------------------------------
 
