@@ -471,22 +471,6 @@ from_script (Script bs) = go 0 where
 
                 _ -> go (succ j)
 
--- | Convert a 'Script' to a 'ScriptHash', ensuring that it doesn't exceed
---   the maximum redeemscript size.
-to_scripthash :: Script -> Maybe ScriptHash
-to_scripthash (Script bs)
-  | BA.sizeofByteArray bs > _MAX_REDEEM_SCRIPT_SIZE = Nothing
-  | otherwise = Just $!
-      ScriptHash (RIPEMD160.hash (SHA256.hash (ba_to_bs bs)))
-
--- | Convert a 'Script' to a 'WitnessScriptHash', ensuring that it doesn't
---   the maximum witness script size.
-to_witness_scripthash :: Script -> Maybe WitnessScriptHash
-to_witness_scripthash (Script bs)
-  | BA.sizeofByteArray bs > _MAX_WITNESS_SCRIPT_SIZE = Nothing
-  | otherwise = Just $!
-      WitnessScriptHash (SHA256.hash (ba_to_bs bs))
-
 -- convert a pushbytes opcode to its corresponding int
 pushbytes :: Opcode -> Maybe Int
 pushbytes = \case
@@ -567,4 +551,22 @@ pushbytes = \case
   OP_PUSHBYTES_74 -> Just $! 74
   OP_PUSHBYTES_75 -> Just $! 75
   _ -> Nothing
+
+-- script hashes --------------------------------------------------------------
+
+-- | Convert a 'Script' to a 'ScriptHash', ensuring that it doesn't exceed
+--   the maximum redeemscript size.
+to_scripthash :: Script -> Maybe ScriptHash
+to_scripthash (Script bs)
+  | BA.sizeofByteArray bs > _MAX_REDEEM_SCRIPT_SIZE = Nothing
+  | otherwise = Just $!
+      ScriptHash (RIPEMD160.hash (SHA256.hash (ba_to_bs bs)))
+
+-- | Convert a 'Script' to a 'WitnessScriptHash', ensuring that it doesn't
+--   the maximum witness script size.
+to_witness_scripthash :: Script -> Maybe WitnessScriptHash
+to_witness_scripthash (Script bs)
+  | BA.sizeofByteArray bs > _MAX_WITNESS_SCRIPT_SIZE = Nothing
+  | otherwise = Just $!
+      WitnessScriptHash (SHA256.hash (ba_to_bs bs))
 
