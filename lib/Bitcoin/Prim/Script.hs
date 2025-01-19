@@ -79,7 +79,7 @@ hilo :: Word8 -> (Word8, Word8)
 hilo b =
   let hex_charset = "0123456789abcdef"
       hi = BU.unsafeIndex hex_charset (fi b `B.shiftR` 4)
-      lo = BU.unsafeIndex hex_charset (fi b .&. 0b00001111)
+      lo = BU.unsafeIndex hex_charset (fi b .&. 0b0000_1111)
   in  (hi, lo)
 
 -- script and term representation ---------------------------------------------
