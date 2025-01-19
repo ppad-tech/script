@@ -1,0 +1,7 @@
+# Changelog
+
+- 0.1.0 (2025-01-19)
+  * Initial release supporting basic representations of Script, as well
+    as utility functions for converting between them.
+
+
