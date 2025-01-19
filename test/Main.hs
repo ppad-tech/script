@@ -1,5 +1,4 @@
 {-# OPTIONS_GHC -fno-warn-orphans #-}
-{-# OPTIONS_GHC -fno-warn-unused-imports #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NumericUnderscores #-}
 {-# LANGUAGE OverloadedStrings #-}
@@ -7,12 +6,9 @@
 module Main where
 
 import Bitcoin.Prim.Script
-import qualified Crypto.Hash.SHA256 as SHA256
-import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
 import qualified Data.ByteString as BS
 import qualified Data.ByteString.Base16 as B16
 import qualified Data.Primitive.ByteArray as BA
-import Data.Word (Word8)
 import Test.Tasty
 import qualified Test.Tasty.HUnit as H
 import qualified Test.Tasty.QuickCheck as Q
@@ -53,29 +49,18 @@ newtype RawScript = RawScript Script
 instance Q.Arbitrary RawScript where
   arbitrary = fmap (RawScript . Script) Q.arbitrary
 
--- XX better generators for valid and invalid redeemscripts would be nice.
+-- XX better generators would be nice.
 --    pushdata generation needs to be handled carefully.
 
-newtype ValidRedeemScript = ValidRedeemScript Script
+newtype NonPathologicalScript = NonPathologicalScript Script
   deriving (Eq, Show)
 
-instance Q.Arbitrary ValidRedeemScript where
+instance Q.Arbitrary NonPathologicalScript where
   arbitrary = do
-    l <- Q.chooseInt (0, _MAX_REDEEM_SCRIPT_SIZE)
+    l <- Q.chooseInt (0, 1_024)
     -- pushdata must be added with care; easy to blow up quickcheck
-    bs <- fmap BS.pack (Q.vectorOf l (Q.chooseEnum (100, 255)))
-    pure (ValidRedeemScript (Script (bs_to_ba bs)))
-
--- too large
-newtype InvalidRedeemScript = InvalidRedeemScript Script
-  deriving (Eq, Show)
-
-instance Q.Arbitrary InvalidRedeemScript where
-  arbitrary = do
-    l <- Q.chooseInt (_MAX_REDEEM_SCRIPT_SIZE + 1, 20_000)
-    -- pushdata must be added with care; easy to blow up quickcheck
-    bs <- fmap BS.pack (Q.vectorOf l (Q.chooseEnum (100, 255)))
-    pure (InvalidRedeemScript (Script (bs_to_ba bs)))
+    bs <- fmap BS.pack (Q.vectorOf l (Q.chooseEnum (80, 255)))
+    pure (NonPathologicalScript (Script (bs_to_ba bs)))
 
 -- properties -----------------------------------------------------------------
 
@@ -101,24 +86,12 @@ to_base16_inverts_from_base16 (HexBS bs) =
 
 -- we can only use 'from_script' on non-pathological scripts
 --
--- note the converse is not true
-to_script_inverts_from_script :: ValidRedeemScript -> Bool
-to_script_inverts_from_script (ValidRedeemScript s) =
+-- note the converse (from_script . to_script ~ id) is not true
+to_script_inverts_from_script :: NonPathologicalScript -> Bool
+to_script_inverts_from_script (NonPathologicalScript s) =
   let !terms  = from_script s
       !script = to_script terms
   in  script == s
-
-valid_redeem_script_produces_hash :: ValidRedeemScript -> Bool
-valid_redeem_script_produces_hash (ValidRedeemScript s) =
-  case to_scripthash s of
-    Just {} -> True
-    _ -> False
-
-invalid_redeem_script_doesnt_produce_hash :: InvalidRedeemScript -> Bool
-invalid_redeem_script_doesnt_produce_hash (InvalidRedeemScript s) =
-  case to_scripthash s of
-    Nothing -> True
-    _ -> False
 
 -- assertions -----------------------------------------------------------------
 
@@ -221,13 +194,7 @@ main = defaultMain $
         , Q.testProperty "to_script . from_script ~ id" $
             Q.withMaxSuccess 1000 to_script_inverts_from_script
         ]
-    , testGroup "hashes" [
-          Q.testProperty "valid redeem script produces scripthash" $
-            Q.withMaxSuccess 100 valid_redeem_script_produces_hash
-        , Q.testProperty "invalid redeem script doesn't produce scripthash" $
-            Q.withMaxSuccess 100 invalid_redeem_script_doesnt_produce_hash
-        ]
-        ]
+      ]
   , testGroup "unit tests" [
         H.testCase "p2pkh script decodes to expected terms"
           p2pkh_script_decodes_as_expected

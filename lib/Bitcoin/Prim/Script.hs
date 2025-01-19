@@ -16,13 +16,6 @@
 -- including abstract syntax, 'ByteArray', and base16-encoded
 -- 'ByteString' versions, as well as fast conversion utilities for
 -- working with them.
---
--- Also included are the 'ScriptHash' and
--- 'WitnessScriptHash' types representing
--- [BIP16](https://github.com/bitcoin/bips/blob/master/bip-0016.mediawiki)
--- redeem script and
--- [BIP141](https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki)
--- witness script hashes.
 
 module Bitcoin.Prim.Script (
     -- * Script and Script Terms
@@ -36,22 +29,12 @@ module Bitcoin.Prim.Script (
   , to_script
   , from_script
 
-    -- * Script Hashes
-  , ScriptHash
-  , WitnessScriptHash
-  , to_scripthash
-  , to_witness_scripthash
-
     -- for testing etc.
-  , _MAX_REDEEM_SCRIPT_SIZE
-  , _MAX_WITNESS_SCRIPT_SIZE
   , ba_to_bs
   , bs_to_ba
   ) where
 
 import Control.Monad (guard)
-import qualified Crypto.Hash.RIPEMD160 as RIPEMD160
-import qualified Crypto.Hash.SHA256 as SHA256
 import qualified Data.Bits as B
 import Data.Bits ((.&.), (.|.))
 import qualified Data.ByteString as BS
@@ -63,16 +46,6 @@ import qualified Data.Primitive.ByteArray as BA
 import Data.Word (Word8, Word16, Word32)
 import GHC.ForeignPtr
 import System.IO.Unsafe
-
--- constants ------------------------------------------------------------------
-
--- max redeem script size for a p2sh output
-_MAX_REDEEM_SCRIPT_SIZE :: Int
-_MAX_REDEEM_SCRIPT_SIZE = 520
-
--- max witness script size
-_MAX_WITNESS_SCRIPT_SIZE :: Int
-_MAX_WITNESS_SCRIPT_SIZE = 10_000
 
 -- utilities ------------------------------------------------------------------
 
@@ -109,7 +82,7 @@ hilo b =
       lo = BU.unsafeIndex hex_charset (fi b .&. 0b00001111)
   in  (hi, lo)
 
--- script, hash, and term representation --------------------------------------
+-- script and term representation ---------------------------------------------
 
 -- | A Script program, represented as a 'ByteArray'.
 newtype Script = Script BA.ByteArray
@@ -126,41 +99,6 @@ instance Show Term where
   show (BYTE w) =
     let (hi, lo) = hilo w
     in  "0x" <> (C.chr (fi hi) : C.chr (fi lo) : [])
-
--- XX we're following rust-bitcoin, but should these really be included
---    in this particular library?
-
--- | A p2sh scripthash, i.e. HASH160 of a 'Script'.
---
---   The underlying 'Script' is guaranteed to be at most 520 bytes, to
---   guarantee in-principle p2sh spendability per
---   [BIP16](https://github.com/bitcoin/bips/blob/master/bip-0016.mediawiki).
-newtype ScriptHash = ScriptHash BS.ByteString
-  deriving Eq
-
-instance Show ScriptHash where
-  show (ScriptHash bs) = "ScriptHash 0x" <> go bs where
-    go b = case BS.uncons b of
-      Nothing -> mempty
-      Just (h, t) ->
-        let (hi, lo) = hilo h
-        in  C.chr (fi hi) : C.chr (fi lo) : go t
-
--- | A p2wsh witness scripthash, i.e. SHA256 of a 'Script'.
---
---   The underlying 'Script' is guaranteed to be at most 10,000 bytes, to
---   guarantee in-principle p2wsh spendability per
---   [BIP141](https://github.com/bitcoin/bips/blob/master/bip-0141.mediawiki).
-newtype WitnessScriptHash = WitnessScriptHash BS.ByteString
-  deriving Eq
-
-instance Show WitnessScriptHash where
-  show (WitnessScriptHash bs) = "WitnessScriptHash 0x" <> go bs where
-    go b = case BS.uncons b of
-      Nothing -> mempty
-      Just (h, t) ->
-        let (hi, lo) = hilo h
-        in  C.chr (fi hi) : C.chr (fi lo) : go t
 
 -- script conversions ---------------------------------------------------------
 
@@ -233,24 +171,6 @@ from_script (Script bs) = go 0 where
                       : read_pay (len_idx + 4) (len_idx + 4 + fi pay_len)
 
                 _ -> go (succ j)
-
--- script hashes --------------------------------------------------------------
-
--- | Convert a 'Script' to a 'ScriptHash', ensuring that it doesn't exceed
---   the maximum redeemscript size.
-to_scripthash :: Script -> Maybe ScriptHash
-to_scripthash (Script bs)
-  | BA.sizeofByteArray bs > _MAX_REDEEM_SCRIPT_SIZE = Nothing
-  | otherwise = Just $!
-      ScriptHash (RIPEMD160.hash (SHA256.hash (ba_to_bs bs)))
-
--- | Convert a 'Script' to a 'WitnessScriptHash', ensuring that it doesn't
---   the maximum witness script size.
-to_witness_scripthash :: Script -> Maybe WitnessScriptHash
-to_witness_scripthash (Script bs)
-  | BA.sizeofByteArray bs > _MAX_WITNESS_SCRIPT_SIZE = Nothing
-  | otherwise = Just $!
-      WitnessScriptHash (SHA256.hash (ba_to_bs bs))
 
 -- opcodes and utilities ------------------------------------------------------
 

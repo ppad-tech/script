@@ -1,7 +1,7 @@
 cabal-version:      3.0
 name:               ppad-script
 version:            0.1.0
-synopsis:           Script and utilities.
+synopsis:           Primitive (Bitcoin) Script support.
 license:            MIT
 license-file:       LICENSE
 author:             Jared Tobin
@@ -11,7 +11,10 @@ build-type:         Simple
 tested-with:        GHC == { 9.8.1 }
 extra-doc-files:    CHANGELOG
 description:
-  A representation of Script, as well as utilities for working with it.
+  Representations for [Script](https://en.bitcoin.it/wiki/Script),
+  including abstract syntax, 'ByteArray', and base16-encoded
+  'ByteString' versions, as well as fast conversion utilities for
+  working with them.
 
 source-repository head
   type:     git
@@ -29,11 +32,6 @@ library
     , bytestring >= 0.9 && < 0.13
     , primitive >= 0.8 && < 0.10
     , ppad-base16 >= 0.1 && < 0.2
-    , ppad-base58 >= 0.1 && < 0.2
-    , ppad-bech32 >= 0.2 && < 0.3
-    , ppad-ripemd160 >= 0.1 && < 0.2
-    , ppad-secp256k1 >= 0.2.1 && < 0.3
-    , ppad-sha256 >= 0.2 && < 0.3
 
 test-suite script-tests
   type:                exitcode-stdio-1.0
@@ -48,11 +46,7 @@ test-suite script-tests
     , base
     , bytestring
     , ppad-base16
-    , ppad-base58
     , ppad-script
-    , ppad-ripemd160
-    , ppad-secp256k1
-    , ppad-sha256
     , primitive
     , tasty
     , tasty-hunit
