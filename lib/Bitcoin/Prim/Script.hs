@@ -17,8 +17,8 @@ module Bitcoin.Prim.Script (
   , from_script
 
     -- * Script Hashes
-  , ScriptHash(..)
-  , WitnessScriptHash(..)
+  , ScriptHash
+  , WitnessScriptHash
   , to_scripthash
   , to_witness_scripthash
 
