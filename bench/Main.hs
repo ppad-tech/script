@@ -60,11 +60,24 @@ from_script = bench "from_script" $ nf S.from_script script where
     Nothing -> error "invalid script"
     Just !s  -> s
 
+to_base16 :: Benchmark
+to_base16 = bench "to_base16" $ nf S.to_base16 script where
+  b16 = "76a91489abcdefabbaabbaabbaabbaabbaabbaabbaabba88ac"
+  script = case S.from_base16 b16 of
+    Nothing -> error "invalid script"
+    Just !s  -> s
+
+from_base16 :: Benchmark
+from_base16 = bench "from_base16" $ nf S.from_base16 b16 where
+  b16 = "76a91489abcdefabbaabbaabbaabbaabbaabbaabbaabba88ac"
+
 main :: IO ()
 main = defaultMain [
     ba_to_bs
   , bs_to_ba
   , to_script
   , from_script
+  , to_base16
+  , from_base16
   ]
 
