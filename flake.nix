@@ -11,6 +11,7 @@
       type = "git";
       url  = "git://git.ppad.tech/base16.git";
       ref  = "master";
+      inputs.ppad-nixpkgs.follows = "ppad-nixpkgs";
     };
     flake-utils.follows = "ppad-nixpkgs/flake-utils";
     nixpkgs.follows = "ppad-nixpkgs/nixpkgs";
