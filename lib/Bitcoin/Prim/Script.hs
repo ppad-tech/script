@@ -93,7 +93,8 @@ hilo b =
 newtype Script = Script BA.ByteArray
   deriving (Eq, Show)
 
--- | Terms of the Script language (either opcodes or bytes).
+-- | Terms of the Script language, each being an 'Opcode' or 'Word8'
+--   byte.
 --
 --   >>> OPCODE OP_RETURN
 --   OP_RETURN
@@ -112,7 +113,7 @@ instance Show Term where
 
 -- script conversions ---------------------------------------------------------
 
--- | Convert a 'Script' to a base16-encoded ByteString.
+-- | Convert a 'Script' to a base16-encoded 'ByteString'.
 --
 --   >>> let script = to_script [OPCODE OP_1, OPCODE OP_2, OPCODE OP_ADD]
 --   >>> to_base16 script
@@ -121,7 +122,10 @@ to_base16 :: Script -> BS.ByteString
 to_base16 (Script ba) = B16.encode (ba_to_bs ba)
 {-# INLINE to_base16 #-}
 
--- | Convert a base16-encoded ByteString to a Script.
+-- | Convert a base16-encoded 'ByteString' to a 'Script'.
+--
+--   >>> from_base16 "515293"
+--   Just (Script [0x51, 0x52, 0x93])
 from_base16 :: BS.ByteString -> Maybe Script
 from_base16 b16 = do
   bs <- B16.decode b16
@@ -129,6 +133,9 @@ from_base16 b16 = do
 {-# INLINE from_base16 #-}
 
 -- | Pack a list of Script terms into a 'Script'.
+--
+--   >>> to_script [OPCODE OP_1, OPCODE OP_2, OPCODE OP_ADD]
+--   Script [0x51, 0x52, 0x93]
 to_script :: [Term] -> Script
 to_script terms =
     let !bs = BS.pack (fmap term_to_byte terms)
@@ -142,6 +149,10 @@ to_script terms =
 {-# NOINLINE to_script #-} -- inlining causes GHC to panic during compilation
 
 -- | Unpack a 'Script' into a list of Script terms.
+--
+--   >>> let Just script = from_base16 "515293"
+--   >>> from_script script
+--   [OP_1, OP_2, OP_ADD}
 from_script :: Script -> [Term]
 from_script (Script bs) = go 0 where
   !l = BA.sizeofByteArray bs
@@ -189,6 +200,9 @@ from_script (Script bs) = go 0 where
 -- opcodes and utilities ------------------------------------------------------
 
 -- | Primitive opcodes.
+--
+--   See, for example [opcodeexplained](https://opcodeexplained.com/opcodes/)
+--   for detail on each.
 data Opcode =
     OP_PUSHBYTES_0
   | OP_PUSHBYTES_1
