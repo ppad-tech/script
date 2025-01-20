@@ -13,8 +13,8 @@
 -- Maintainer: Jared Tobin <jared@ppad.tech>
 --
 -- Representations for [Script](https://en.bitcoin.it/wiki/Script),
--- including abstract syntax, 'ByteArray', and base16-encoded
--- 'ByteString' versions, as well as fast conversion utilities for
+-- including abstract syntax, 'BA.ByteArray', and base16-encoded
+-- 'BS.ByteString' versions, as well as fast conversion utilities for
 -- working with them.
 
 module Bitcoin.Prim.Script (
@@ -84,7 +84,7 @@ hilo b =
 
 -- script and term representation ---------------------------------------------
 
--- | A Script program, represented as a 'ByteArray'.
+-- | A Script program, represented as a 'BA.ByteArray'.
 --
 --   >>> from_base16 "0014b472a266d0bd89c13706a4132ccfb16f7c3b9fcb"
 --   Just (Script
@@ -113,7 +113,7 @@ instance Show Term where
 
 -- script conversions ---------------------------------------------------------
 
--- | Convert a 'Script' to a base16-encoded 'ByteString'.
+-- | Convert a 'Script' to a base16-encoded 'BS.ByteString'.
 --
 --   >>> let script = to_script [OPCODE OP_1, OPCODE OP_2, OPCODE OP_ADD]
 --   >>> to_base16 script
@@ -122,7 +122,7 @@ to_base16 :: Script -> BS.ByteString
 to_base16 (Script ba) = B16.encode (ba_to_bs ba)
 {-# INLINE to_base16 #-}
 
--- | Convert a base16-encoded 'ByteString' to a 'Script'.
+-- | Convert a base16-encoded 'BS.ByteString' to a 'Script'.
 --
 --   >>> from_base16 "515293"
 --   Just (Script [0x51, 0x52, 0x93])
