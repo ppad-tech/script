@@ -116,7 +116,8 @@ to get a REPL for the main library.
 
 ## Attribution
 
-The list of opcodes was taken verbatim from the 'opcode' crate found in
+The list of opcodes was originally taken
+verbatim from the 'opcode' crate found in
 [rust-bitcoin](https://github.com/rust-bitcoin/rust-bitcoin).
 
 [nixos]: https://nixos.org/
