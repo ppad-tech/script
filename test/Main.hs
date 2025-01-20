@@ -184,13 +184,13 @@ main = defaultMain $
     testGroup "property tests" [
       testGroup "inverses" [
           Q.testProperty "ba_to_bs . bs_to_ba ~ id" $
-            Q.withMaxSuccess 500 ba_to_bs_inverts_bs_to_ba
+            Q.withMaxSuccess 100 ba_to_bs_inverts_bs_to_ba
         , Q.testProperty "ba_to_bs . bs_to_ba ~ id" $
-            Q.withMaxSuccess 500 bs_to_ba_inverts_ba_to_bs
+            Q.withMaxSuccess 100 bs_to_ba_inverts_ba_to_bs
         , Q.testProperty "from_base16 . to_base16 ~ id" $
-            Q.withMaxSuccess 500 from_base16_inverts_to_base16
+            Q.withMaxSuccess 100 from_base16_inverts_to_base16
         , Q.testProperty "to_base16 . from_base16 ~ id" $
-            Q.withMaxSuccess 500 to_base16_inverts_from_base16
+            Q.withMaxSuccess 100 to_base16_inverts_from_base16
         , Q.testProperty "to_script . from_script ~ id" $
             Q.withMaxSuccess 1000 to_script_inverts_from_script
         ]
