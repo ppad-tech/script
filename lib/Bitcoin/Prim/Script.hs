@@ -85,10 +85,20 @@ hilo b =
 -- script and term representation ---------------------------------------------
 
 -- | A Script program, represented as a 'ByteArray'.
+--
+--   >>> from_base16 "0014b472a266d0bd89c13706a4132ccfb16f7c3b9fcb"
+--   Just (Script
+--     [ 0x00, 0x14, 0xb4, 0x72, 0xa2, 0x66, 0xd0, 0xbd, 0x89, 0xc1, 0x37
+--     , 0x06, 0xa4, 0x13, 0x2c, 0xcf, 0xb1, 0x6f, 0x7c, 0x3b, 0x9f, 0xcb])
 newtype Script = Script BA.ByteArray
   deriving (Eq, Show)
 
 -- | Terms of the Script language (either opcodes or bytes).
+--
+--   >>> OPCODE OP_RETURN
+--   OP_RETURN
+--   >>> BYTE 0x00
+--   0x00
 data Term =
     OPCODE {-# UNPACK #-} !Opcode
   | BYTE   {-# UNPACK #-} !Word8
@@ -103,6 +113,10 @@ instance Show Term where
 -- script conversions ---------------------------------------------------------
 
 -- | Convert a 'Script' to a base16-encoded ByteString.
+--
+--   >>> let script = to_script [OPCODE OP_1, OPCODE OP_2, OPCODE OP_ADD]
+--   >>> to_base16 script
+--  "515293"
 to_base16 :: Script -> BS.ByteString
 to_base16 (Script ba) = B16.encode (ba_to_bs ba)
 {-# INLINE to_base16 #-}
@@ -255,24 +269,24 @@ data Opcode =
   | OP_PUSHDATA1
   | OP_PUSHDATA2
   | OP_PUSHDATA4
-  | OP_PUSHNUM_NEG1
+  | OP_1NEGATE
   | OP_RESERVED
-  | OP_PUSHNUM_1
-  | OP_PUSHNUM_2
-  | OP_PUSHNUM_3
-  | OP_PUSHNUM_4
-  | OP_PUSHNUM_5
-  | OP_PUSHNUM_6
-  | OP_PUSHNUM_7
-  | OP_PUSHNUM_8
-  | OP_PUSHNUM_9
-  | OP_PUSHNUM_10
-  | OP_PUSHNUM_11
-  | OP_PUSHNUM_12
-  | OP_PUSHNUM_13
-  | OP_PUSHNUM_14
-  | OP_PUSHNUM_15
-  | OP_PUSHNUM_16
+  | OP_1
+  | OP_2
+  | OP_3
+  | OP_4
+  | OP_5
+  | OP_6
+  | OP_7
+  | OP_8
+  | OP_9
+  | OP_10
+  | OP_11
+  | OP_12
+  | OP_13
+  | OP_14
+  | OP_15
+  | OP_16
   | OP_NOP
   | OP_VER
   | OP_IF
