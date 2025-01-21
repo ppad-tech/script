@@ -152,7 +152,7 @@ to_script terms =
 --
 --   >>> let Just script = from_base16 "515293"
 --   >>> from_script script
---   [OP_1, OP_2, OP_ADD}
+--   [OP_1, OP_2, OP_ADD]
 from_script :: Script -> [Term]
 from_script (Script bs) = go 0 where
   !l = BA.sizeofByteArray bs
