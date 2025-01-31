@@ -91,9 +91,6 @@ This library aims at the maximum security achievable in a
 garbage-collected language under an optimizing compiler such as GHC, in
 which strict constant-timeness can be challenging to achieve.
 
-This is an early-development, pre-production-ready release, and is not
-**not** yet suitable for mainnet use.
-
 If you discover any vulnerabilities, please disclose them via
 security@ppad.tech.
 
