@@ -1,5 +1,8 @@
 # ppad-script
 
+[![](https://img.shields.io/hackage/v/ppad-script?color=blue)](https://hackage.haskell.org/package/ppad-script)
+![](https://img.shields.io/badge/license-MIT-brightgreen)
+
 Representations for [Script](https://en.bitcoin.it/wiki/Script),
 including abstract syntax, 'ByteArray', and base16-encoded 'ByteString'
 versions, as well as fast conversion utilities for working with them.
