@@ -1,4 +1,4 @@
-# ppad-script
+# script
 
 [![](https://img.shields.io/hackage/v/ppad-script?color=blue)](https://hackage.haskell.org/package/ppad-script)
 ![](https://img.shields.io/badge/license-MIT-brightgreen)
