@@ -1,6 +1,6 @@
 cabal-version:      3.0
 name:               ppad-script
-version:            0.2.1
+version:            0.2.2
 synopsis:           Primitive Script support.
 license:            MIT
 license-file:       LICENSE
@@ -8,13 +8,18 @@ author:             Jared Tobin
 maintainer:         jared@ppad.tech
 category:           Cryptography
 build-type:         Simple
-tested-with:        GHC == { 9.8.1 }
+tested-with:        GHC == 9.10.3
 extra-doc-files:    CHANGELOG
 description:
   Representations for [Script](https://en.bitcoin.it/wiki/Script),
   including abstract syntax, 'ByteArray', and base16-encoded
   'ByteString' versions, as well as fast conversion utilities for
   working with them.
+
+flag llvm
+  description: Use GHC's LLVM backend.
+  default:     False
+  manual:      True
 
 source-repository head
   type:     git
@@ -25,13 +30,15 @@ library
   hs-source-dirs:   lib
   ghc-options:
       -Wall
+  if flag(llvm)
+    ghc-options: -fllvm -O2
   exposed-modules:
       Bitcoin.Prim.Script
   build-depends:
       base >= 4.9 && < 5
     , bytestring >= 0.9 && < 0.13
     , primitive >= 0.8 && < 0.10
-    , ppad-base16 >= 0.1 && < 0.3
+    , ppad-base16 >= 0.2.1 && < 0.3
 
 test-suite script-tests
   type:                exitcode-stdio-1.0

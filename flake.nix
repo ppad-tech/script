@@ -26,12 +26,17 @@
 
         pkgs = import nixpkgs { inherit system; };
         hlib = pkgs.haskell.lib;
+        llvm = pkgs.llvmPackages_19.llvm;
 
         base16 = ppad-base16.packages.${system}.default;
+        base16-llvm =
+          hlib.addBuildTools
+            (hlib.enableCabalFlag base16 "llvm")
+            [ llvm ];
 
-        hpkgs = pkgs.haskell.packages.ghc981.extend (new: old: {
-          ppad-base16 = base16;
-          ${lib} = old.callCabal2nixWithOptions lib ./. "--enable-profiling" {
+        hpkgs = pkgs.haskell.packages.ghc910.extend (new: old: {
+          ppad-base16 = base16-llvm;
+          ${lib} = new.callCabal2nixWithOptions lib ./. "--enable-profiling" {
             ppad-base16 = new.ppad-base16;
           };
         });
@@ -51,9 +56,8 @@
             buildInputs = [
               cabal
               cc
+              llvm
             ];
-
-            inputsFrom = builtins.attrValues self.packages.${system};
 
             doBenchmark = true;
 
@@ -63,6 +67,7 @@
               echo "cc:    $(${cc}/bin/cc --version)"
               echo "ghc:   $(${ghc}/bin/ghc --version)"
               echo "cabal: $(${cabal}/bin/cabal --version)"
+              echo "llc:   $(${llvm}/bin/llc --version | head -2 | tail -1)"
             '';
           };
         }

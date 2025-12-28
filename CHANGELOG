@@ -1,5 +1,8 @@
 # Changelog
 
+- 0.2.2 (2025-12-28)
+  * Adds an 'llvm' flag and tests with GHC 9.10.3.
+
 - 0.2.1 (2025-01-21)
   * Minor Haddock improvements.
 

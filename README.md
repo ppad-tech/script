@@ -53,37 +53,33 @@ Haddocks (API documentation, etc.) are hosted at
 
 The aim is best-in-class performance for highly-auditable Haskell code.
 
-Current benchmark figures on my mid-2020 MacBook Air look like (use
+Current benchmark figures on my M4 Silicon MacBook Air look like (use
 `cabal bench` to run the benchmark suite):
 
 ```
   benchmarking to_script
-  time                 484.9 ns   (478.3 ns .. 491.4 ns)
-                       0.998 R²   (0.997 R² .. 0.999 R²)
-  mean                 496.2 ns   (485.8 ns .. 508.1 ns)
-  std dev              37.17 ns   (30.08 ns .. 49.95 ns)
-  variance introduced by outliers: 83% (severely inflated)
+  time                 228.1 ns   (227.9 ns .. 228.6 ns)
+                       1.000 R²   (1.000 R² .. 1.000 R²)
+  mean                 228.9 ns   (228.5 ns .. 230.0 ns)
+  std dev              2.167 ns   (1.241 ns .. 3.840 ns)
 
   benchmarking from_script
-  time                 380.8 ns   (374.3 ns .. 387.5 ns)
-                       0.998 R²   (0.996 R² .. 0.999 R²)
-  mean                 383.0 ns   (375.3 ns .. 395.4 ns)
-  std dev              31.88 ns   (22.41 ns .. 43.86 ns)
-  variance introduced by outliers: 86% (severely inflated)
+  time                 329.3 ns   (327.4 ns .. 331.4 ns)
+                       1.000 R²   (1.000 R² .. 1.000 R²)
+  mean                 331.3 ns   (330.1 ns .. 332.3 ns)
+  std dev              3.502 ns   (2.723 ns .. 4.492 ns)
 
   benchmarking to_base16
-  time                 291.3 ns   (285.6 ns .. 297.9 ns)
-                       0.996 R²   (0.995 R² .. 0.998 R²)
-  mean                 298.3 ns   (291.8 ns .. 308.1 ns)
-  std dev              26.38 ns   (21.25 ns .. 34.27 ns)
-  variance introduced by outliers: 87% (severely inflated)
+  time                 150.3 ns   (149.6 ns .. 150.9 ns)
+                       1.000 R²   (1.000 R² .. 1.000 R²)
+  mean                 149.6 ns   (149.3 ns .. 149.9 ns)
+  std dev              1.101 ns   (884.2 ps .. 1.334 ns)
 
   benchmarking from_base16
-  time                 439.1 ns   (429.9 ns .. 448.2 ns)
-                       0.997 R²   (0.996 R² .. 0.998 R²)
-  mean                 437.9 ns   (429.9 ns .. 450.0 ns)
-  std dev              32.67 ns   (26.12 ns .. 44.04 ns)
-  variance introduced by outliers: 83% (severely inflated)
+  time                 101.1 ns   (100.8 ns .. 101.4 ns)
+                       1.000 R²   (1.000 R² .. 1.000 R²)
+  mean                 100.7 ns   (100.4 ns .. 101.0 ns)
+  std dev              949.7 ps   (766.3 ps .. 1.162 ns)
 ```
 
 where the inputs to the above functions are variations of the script found
